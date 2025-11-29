@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "530194632368",
+    "firebase_url": "https://ai-spor-analiz-2024-default-rtdb.firebaseio.com",
+    "project_id": "ai-spor-analiz-2024",
+    "storage_bucket": "ai-spor-analiz-2024.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:530194632368:android:86a2e8c86a2db58f29b575",
+        "android_client_info": {
+          "package_name": "com.example.ai_spor_analiz"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "530194632368-0jlof9c6usr8iaioq7i709r0bkapalk2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTnCsqYC2cIaqgpaZiMPdhRarg2Id7h-8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "530194632368-0jlof9c6usr8iaioq7i709r0bkapalk2.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "530194632368-kkfgqjf2tjtgc7f7jsd5fm9q3c2eo374.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.aiSporAnaliz"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,59 @@
+cd C:\Users\YourName\Documents\Projects
+```
+5. **Yukarıdaki script'i kopyalayıp terminale yapıştırın ve Enter'a basın**
+
+## 📂 Oluşturulacak Klasör Yapısı
+```
+ai_spor_analiz/
+│
+├── lib/
+│   ├── core/
+│   │   ├── constants/      # Sabit değerler (API URLs, colors vb.)
+│   │   ├── theme/          # Tema ve stil tanımlamaları
+│   │   ├── utils/          # Yardımcı fonksiyonlar
+│   │   └── routes/         # Navigasyon route'ları
+│   │
+│   ├── models/             # Veri modelleri (User, Bulletin, Analysis vb.)
+│   │
+│   ├── services/           # Servis katmanı
+│   │   ├── firebase/       # Firebase işlemleri
+│   │   ├── api/            # API çağrıları
+│   │   └── storage/        # Local storage
+│   │
+│   ├── providers/          # State management (Provider/Riverpod)
+│   │
+│   ├── screens/            # Ekranlar
+│   │   ├── auth/           # Giriş/Kayıt ekranları
+│   │   ├── home/           # Ana ekran
+│   │   ├── upload/         # Görsel yükleme
+│   │   ├── analysis/       # Analiz sonuçları
+│   │   ├── subscription/   # Abonelik
+│   │   └── profile/        # Profil
+│   │
+│   ├── widgets/            # Yeniden kullanılabilir widget'lar
+│   │   ├── common/         # Genel widget'lar (button, card vb.)
+│   │   ├── auth/           # Auth widget'ları
+│   │   ├── upload/         # Upload widget'ları
+│   │   └── analysis/       # Analysis widget'ları
+│   │
+│   └── main.dart           # Ana uygulama giriş noktası
+│
+├── assets/
+│   ├── images/             # Görseller
+│   ├── icons/              # İkonlar
+│   └── fonts/              # Özel fontlar
+│
+├── test/
+│   ├── unit/               # Birim testler
+│   └── widget/             # Widget testleri
+│
+├── functions/              # Firebase Cloud Functions (Backend)
+│   └── src/
+│       ├── gemini/         # Gemini AI entegrasyonu
+│       ├── api-football/   # API-FOOTBALL entegrasyonu
+│       └── utils/          # Yardımcı fonksiyonlar
+│
+└── docs/                   # Dokümantasyon
+    ├── prompts/            # AI prompt'ları
+    ├── api/                # API dokümantasyonu
+    └── screenshots/        # Ekran görüntüleri
