@@ -1,18 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-
-  Future<void> _launchURL(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      throw Exception('Sayfa açılamadı: $url');
-    }
-  }
 
   Future<void> _showLogoutDialog(BuildContext context) async {
     return showDialog(
@@ -219,7 +211,6 @@ class ProfileScreen extends StatelessWidget {
               title: 'Hesap Bilgileri',
               subtitle: 'Ad, soyad, e-posta',
               onTap: () {
-                // TODO: Hesap bilgileri düzenleme sayfası
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Yakında eklenecek')),
                 );
@@ -239,10 +230,8 @@ class ProfileScreen extends StatelessWidget {
               trailing: authProvider.isPremium ? null : const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 if (authProvider.isPremium) {
-                  // Premium detayları göster
                   _showPremiumDetails(context, userModel);
                 } else {
-                  // Premium satın alma sayfası
                   context.push('/subscription');
                 }
               },
@@ -292,28 +281,26 @@ class ProfileScreen extends StatelessWidget {
               context,
               icon: Icons.description_outlined,
               title: 'Kullanıcı Sözleşmesi',
-              onTap: () => _launchURL('https://bilwin.inc/terms'),
+              onTap: () => context.push('/terms'),
             ),
             _buildListTile(
               context,
               icon: Icons.privacy_tip_outlined,
               title: 'Gizlilik Politikası',
-              onTap: () => _launchURL('https://bilwin.inc/privacy'),
+              onTap: () => context.push('/privacy'),
             ),
             _buildListTile(
               context,
               icon: Icons.info_outline,
               title: 'Uygulama Hakkında',
               subtitle: 'Versiyon 1.0.0',
-              onTap: () {
-                _showAboutDialog(context);
-              },
+              onTap: () => context.push('/about'),
             ),
             _buildListTile(
               context,
               icon: Icons.help_outline,
               title: 'Yardım & Destek',
-              onTap: () => _launchURL('https://bilwin.inc/support'),
+              onTap: () => context.push('/help'),
             ),
 
             const SizedBox(height: 24),
@@ -478,64 +465,6 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Tamam'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAboutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              Icons.sports_soccer,
-              color: Theme.of(context).primaryColor,
-            ),
-            const SizedBox(width: 8),
-            const Text('AI Spor Pro'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'AI destekli spor bülteni analiz uygulaması',
-              style: TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Versiyon: 1.0.0',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Yapımcı: Bilwin.inc',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '© 2025 Tüm hakları saklıdır.',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
-            ),
           ],
         ),
         actions: [

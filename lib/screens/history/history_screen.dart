@@ -13,7 +13,7 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  String _filterStatus = 'all'; // all, completed, analyzing, failed
+  String _filterStatus = 'all';
 
   @override
   Widget build(BuildContext context) {
@@ -38,22 +38,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               setState(() => _filterStatus = value);
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'all',
-                child: Text('Tümü'),
-              ),
-              const PopupMenuItem(
-                value: 'completed',
-                child: Text('Tamamlananlar'),
-              ),
-              const PopupMenuItem(
-                value: 'analyzing',
-                child: Text('İşlenenler'),
-              ),
-              const PopupMenuItem(
-                value: 'failed',
-                child: Text('Başarısızlar'),
-              ),
+              const PopupMenuItem(value: 'all', child: Text('Tümü')),
+              const PopupMenuItem(value: 'completed', child: Text('Tamamlananlar')),
+              const PopupMenuItem(value: 'analyzing', child: Text('İşlenenler')),
+              const PopupMenuItem(value: 'failed', child: Text('Başarısızlar')),
             ],
           ),
         ],
@@ -85,7 +73,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
               itemBuilder: (context, index) {
                 final doc = bulletins[index];
                 final bulletin = BulletinModel.fromFirestore(doc);
-                
                 return _buildBulletinCard(context, bulletin);
               },
             ),
@@ -95,7 +82,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // Filtreye göre query oluştur
   Stream<QuerySnapshot> _buildQuery(String userId) {
     Query query = FirebaseFirestore.instance
         .collection('bulletins')
@@ -110,12 +96,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return query.snapshots();
   }
 
-  // Bülten Kartı
   Widget _buildBulletinCard(BuildContext context, BulletinModel bulletin) {
     final status = _getStatusInfo(bulletin.status);
     final hasResults = bulletin.status == 'completed' && bulletin.analysis != null;
     
-    // Başarı oranını hesapla
     double? successRate;
     if (hasResults) {
       try {
@@ -141,7 +125,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             context.push('/analysis/${bulletin.id}');
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
+              const SnackBar(
                 content: Text('Bu analiz henüz tamamlanmadı'),
                 backgroundColor: Colors.orange,
               ),
@@ -154,50 +138,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Üst satır: Tarih + Status Badge
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Tarih
                   Row(
                     children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 16,
-                        color: Colors.grey[600],
-                      ),
+                      Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
                       const SizedBox(width: 6),
                       Text(
                         _formatDate(bulletin.createdAt),
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 13,
-                        ),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
                       ),
                     ],
                   ),
-                  
-                  // Status Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: status['color'].withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: status['color'].withOpacity(0.3),
-                      ),
+                      border: Border.all(color: status['color'].withOpacity(0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          status['icon'],
-                          size: 14,
-                          color: status['color'],
-                        ),
+                        Icon(status['icon'], size: 14, color: status['color']),
                         const SizedBox(width: 4),
                         Text(
                           status['text'],
@@ -213,23 +177,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
               
-              const SizedBox(height: 12),
-
-              // Başarı Oranı (sadece completed için)
               if (hasResults && successRate != null) ...[
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Başarı Olasılığı',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
+                          Text('Başarı Olasılığı', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                           const SizedBox(height: 4),
                           Row(
                             children: [
@@ -261,8 +217,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    
-                    // Maç sayısı
                     _buildInfoChip(
                       context,
                       icon: Icons.sports_soccer,
@@ -271,18 +225,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
               ],
-
-              // Alt satır: Aksiyon butonları
+              
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  // Görüntüle butonu
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        context.push('/analysis/${bulletin.id}');
-                      },
+                      onPressed: () => context.push('/analysis/${bulletin.id}'),
                       icon: const Icon(Icons.visibility, size: 18),
                       label: const Text('Görüntüle'),
                       style: OutlinedButton.styleFrom(
@@ -292,8 +242,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  
-                  // Sil butonu
                   IconButton(
                     onPressed: () => _showDeleteDialog(context, bulletin),
                     icon: const Icon(Icons.delete_outline),
@@ -311,9 +259,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // Bilgi Chip
-  Widget _buildInfoChip(
-    BuildContext context, {
+  Widget _buildInfoChip(BuildContext context, {
     required IconData icon,
     required String label,
     required Color color,
@@ -330,24 +276,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-  // Boş durum
   Widget _buildEmpty(BuildContext context) {
-    String message;
-    String description;
-
+    String message, description;
     switch (_filterStatus) {
       case 'completed':
         message = 'Tamamlanmış analiz yok';
@@ -370,23 +306,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.history,
-            size: 80,
-            color: Colors.grey[300],
-          ),
+          Icon(Icons.history, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          Text(
-            message,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.grey[700],
-                ),
-          ),
+          Text(message, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey[700])),
           const SizedBox(height: 8),
-          Text(
-            description,
-            style: TextStyle(color: Colors.grey[600]),
-          ),
+          Text(description, style: TextStyle(color: Colors.grey[600])),
           const SizedBox(height: 32),
           if (_filterStatus == 'all')
             ElevatedButton.icon(
@@ -399,7 +323,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // Hata durumu
   Widget _buildError(BuildContext context, String error) {
     return Center(
       child: Padding(
@@ -407,114 +330,65 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 80,
-              color: Colors.red[300],
-            ),
+            Icon(Icons.error_outline, size: 80, color: Colors.red[300]),
             const SizedBox(height: 16),
-            Text(
-              'Bir Hata Oluştu',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('Bir Hata Oluştu', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600]),
-            ),
+            Text(error, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600])),
           ],
         ),
       ),
     );
   }
 
-  // Silme onayı
   Future<void> _showDeleteDialog(BuildContext context, BulletinModel bulletin) async {
     return showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Analizi Sil'),
-          content: const Text('Bu analizi silmek istediğinize emin misiniz?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('İptal'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                
-                try {
-                  await FirebaseFirestore.instance
-                      .collection('bulletins')
-                      .doc(bulletin.id)
-                      .delete();
-                  
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Analiz silindi'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Silme hatası: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+      builder: (context) => AlertDialog(
+        title: const Text('Analizi Sil'),
+        content: const Text('Bu analizi silmek istediğinize emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              try {
+                await FirebaseFirestore.instance.collection('bulletins').doc(bulletin.id).delete();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Analiz silindi'), backgroundColor: Colors.green),
+                  );
                 }
-              },
-              child: const Text(
-                'Sil',
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-          ],
-        );
-      },
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Silme hatası: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Sil', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
-  // Helper Functions
   Map<String, dynamic> _getStatusInfo(String status) {
     switch (status) {
       case 'completed':
-        return {
-          'icon': Icons.check_circle,
-          'text': 'Tamamlandı',
-          'color': Colors.green,
-        };
+        return {'icon': Icons.check_circle, 'text': 'Tamamlandı', 'color': Colors.green};
       case 'analyzing':
-        return {
-          'icon': Icons.hourglass_empty,
-          'text': 'İşleniyor',
-          'color': Colors.orange,
-        };
+        return {'icon': Icons.hourglass_empty, 'text': 'İşleniyor', 'color': Colors.orange};
       case 'failed':
-        return {
-          'icon': Icons.error,
-          'text': 'Başarısız',
-          'color': Colors.red,
-        };
+        return {'icon': Icons.error, 'text': 'Başarısız', 'color': Colors.red};
       case 'pending':
-        return {
-          'icon': Icons.pending,
-          'text': 'Beklemede',
-          'color': Colors.blue,
-        };
+        return {'icon': Icons.pending, 'text': 'Beklemede', 'color': Colors.blue};
       default:
-        return {
-          'icon': Icons.help,
-          'text': 'Bilinmiyor',
-          'color': Colors.grey,
-        };
+        return {'icon': Icons.help, 'text': 'Bilinmiyor', 'color': Colors.grey};
     }
   }
 
@@ -526,7 +400,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   int _getMatchCount(BulletinModel bulletin) {
     if (bulletin.analysis == null) return 0;
-    
     try {
       final analysis = BulletinAnalysis.fromJson(bulletin.analysis!);
       return analysis.predictions.length;
@@ -540,17 +413,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final difference = now.difference(date);
 
     if (difference.inDays == 0) {
-      // Bugün
       return 'Bugün ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } else if (difference.inDays == 1) {
-      // Dün
       return 'Dün ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } else if (difference.inDays < 7) {
-      // Son 7 gün
       final days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
       return '${days[date.weekday - 1]} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } else {
-      // Eski tarih
       return '${date.day}.${date.month}.${date.year}';
     }
   }

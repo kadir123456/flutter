@@ -38,8 +38,12 @@ dependencies:
   # URL Launcher (Kullanıcı sözleşmesi, gizlilik politikası için)
   url_launcher: ^6.3.1
   
-  # UI
+  # Local Storage
+  shared_preferences: ^2.3.4
+  
+  # UI & Fonts
   cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -53,8 +57,4 @@ flutter:
   # assets:
   #   - images/
     
-  # Fontlar (opsiyonel)
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
+  # Fontlar (Google Fonts paketi ile otomatik)

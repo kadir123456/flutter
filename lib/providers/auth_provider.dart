@@ -88,12 +88,8 @@ class AuthProvider extends ChangeNotifier {
         
         await _userService.createOrUpdateUser(newUser);
         
-        await _userService.addCredits(
-          userId: _user!.uid,
-          amount: 3,
-          type: TransactionType.welcome,
-          description: 'Hoşgeldin bonusu - İlk 3 ücretsiz analiz',
-        );
+        // NOT: Kullanıcı zaten 3 kredi ile oluşturuldu, ekstra bonus yok
+        // await _userService.addCredits(...) kaldırıldı
         
         await _loadUserModel(_user!.uid);
         listenToUserModel(_user!.uid);
@@ -201,12 +197,8 @@ class AuthProvider extends ChangeNotifier {
           
           await _userService.createOrUpdateUser(newUser);
           
-          await _userService.addCredits(
-            userId: _user!.uid,
-            amount: 3,
-            type: TransactionType.welcome,
-            description: 'Hoşgeldin bonusu - İlk 3 ücretsiz analiz',
-          );
+          // NOT: Kullanıcı zaten 3 kredi ile oluşturuldu, ekstra bonus yok
+          // await _userService.addCredits(...) kaldırıldı
         } else {
           await _userService.createOrUpdateUser(UserModel(
             uid: _user!.uid,

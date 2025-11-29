@@ -6,6 +6,7 @@ enum TransactionType {
   bonus, // Hediye/bonus
   refund, // İade
   welcome, // Hoşgeldin bonusu
+  premium,
 }
 
 class CreditTransaction {

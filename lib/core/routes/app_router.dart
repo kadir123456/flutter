@@ -8,6 +8,10 @@ import '../../screens/analysis/analysis_screen.dart';
 import '../../screens/history/history_screen.dart';
 import '../../screens/upload/upload_screen.dart';
 import '../../screens/subscription/subscription_screen.dart';
+import '../../screens/static/terms_of_service_screen.dart';
+import '../../screens/static/privacy_policy_screen.dart';
+import '../../screens/static/about_screen.dart';
+import '../../screens/static/help_support_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -50,6 +54,23 @@ final router = GoRouter(
     GoRoute(
       path: '/subscription',
       builder: (context, state) => const SubscriptionScreen(),
+    ),
+    // Static Pages
+    GoRoute(
+      path: '/terms',
+      builder: (context, state) => const TermsOfServiceScreen(),
+    ),
+    GoRoute(
+      path: '/privacy',
+      builder: (context, state) => const PrivacyPolicyScreen(),
+    ),
+    GoRoute(
+      path: '/about',
+      builder: (context, state) => const AboutScreen(),
+    ),
+    GoRoute(
+      path: '/help',
+      builder: (context, state) => const HelpSupportScreen(),
     ),
   ],
 );
