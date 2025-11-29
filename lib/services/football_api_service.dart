@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
 
 class FootballApiService {
   final Dio _dio = Dio();
@@ -35,7 +36,7 @@ class FootballApiService {
       
       return null;
     } catch (e) {
-      print('❌ Takım arama hatası: $e');
+      debugPrint('❌ Takım arama hatası: $e');
       return null;
     }
   }
@@ -74,7 +75,7 @@ class FootballApiService {
       
       return null;
     } catch (e) {
-      print('❌ Maç arama hatası: $e');
+      debugPrint('❌ Maç arama hatası: $e');
       return null;
     }
   }
@@ -95,7 +96,7 @@ class FootballApiService {
       
       return null;
     } catch (e) {
-      print('❌ Maç istatistik hatası: $e');
+      debugPrint('❌ Maç istatistik hatası: $e');
       return null;
     }
   }
@@ -117,7 +118,7 @@ class FootballApiService {
       
       return [];
     } catch (e) {
-      print('❌ Son maçlar hatası: $e');
+      debugPrint('❌ Son maçlar hatası: $e');
       return [];
     }
   }
@@ -138,7 +139,7 @@ class FootballApiService {
       
       return [];
     } catch (e) {
-      print('❌ H2H hatası: $e');
+      debugPrint('❌ H2H hatası: $e');
       return [];
     }
   }
@@ -159,7 +160,7 @@ class FootballApiService {
       
       return [];
     } catch (e) {
-      print('❌ Sakatlık bilgisi hatası: $e');
+      debugPrint('❌ Sakatlık bilgisi hatası: $e');
       return [];
     }
   }
@@ -181,7 +182,7 @@ class FootballApiService {
       
       return null;
     } catch (e) {
-      print('❌ Puan durumu hatası: $e');
+      debugPrint('❌ Puan durumu hatası: $e');
       return null;
     }
   }

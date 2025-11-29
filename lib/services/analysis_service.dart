@@ -50,7 +50,9 @@ class AnalysisService {
           final awayTeamData = await _footballApi.searchTeam(awayTeamName);
           
           if (homeTeamData == null || awayTeamData == null) {
-            print('⚠️ Takımlar API\'de bulunamadı: $homeTeamName vs $awayTeamName');
+            if (kDebugMode) {
+              print('⚠️ Takımlar API\'de bulunamadı: $homeTeamName vs $awayTeamName');
+            }
             
             // API'de bulunamasa bile basit analiz yap
             final basicAnalysis = await _createBasicAnalysis(
@@ -80,7 +82,7 @@ class AnalysisService {
           );
           
           if (analysis != null) {
-            predictions.add(_convertAnalysisToP prediction(
+            predictions.add(_convertAnalysisToPrediction(
               homeTeam: homeTeamData['team']['name'],
               awayTeam: awayTeamData['team']['name'],
               userPrediction: match['userPrediction'] ?? '1',
@@ -88,7 +90,9 @@ class AnalysisService {
             ));
           }
         } catch (e) {
-          print('❌ Maç analiz hatası: ${match['homeTeam']} vs ${match['awayTeam']} - $e');
+          if (kDebugMode) {
+            print('❌ Maç analiz hatası: ${match['homeTeam']} vs ${match['awayTeam']} - $e');
+          }
           
           // Hata durumunda basit analiz ekle
           final basicAnalysis = await _createBasicAnalysis(
@@ -108,26 +112,31 @@ class AnalysisService {
           'homeTeam': p.homeTeam,
           'awayTeam': p.awayTeam,
           'userPrediction': p.userPrediction,
-          'confidence': p.successProbability,
+          'confidence': p.confidence,
         }).toList(),
       );
       
       // 4. ADIM: Sonuçları kaydet
+      final overallSuccessRate = _calculateOverallSuccessRate(predictions);
       final analysis = BulletinAnalysis(
-        extractedText: matchesData.toString(),
         predictions: predictions,
-        overallSuccessRate: _calculateOverallSuccessRate(predictions),
-        geminiSummary: overallSummary ?? 'Genel değerlendirme alınamadı.',
+        overall: OverallAssessment(
+          successProbability: overallSuccessRate,
+          riskiestPicks: _findRiskiestPicks(predictions),
+          strategy: overallSummary ?? 'Genel değerlendirme alınamadı.',
+        ),
       );
       
       // Bulletin'i güncelle
-      await bulletinProvider.updateBulletinAnalysis(bulletinId, analysis);
+      await bulletinProvider.updateBulletinAnalysis(bulletinId, analysis.toMap());
       
       onProgress?.call('Analiz tamamlandı! ✅');
       
       return true;
     } catch (e) {
-      print('❌ Bülten analiz hatası: $e');
+      if (kDebugMode) {
+        print('❌ Bülten analiz hatası: $e');
+      }
       onProgress?.call('Analiz başarısız: $e');
       return false;
     }
@@ -169,10 +178,12 @@ class AnalysisService {
       stats['injuries'] = {
         'home': homeInjuries.length,
         'away': awayInjuries.length,
-        'details': '${homeTeamName}: ${homeInjuries.length} sakatlık, ${awayTeamName}: ${awayInjuries.length} sakatlık',
+        'details': '$homeTeamName: ${homeInjuries.length} sakatlık, $awayTeamName: ${awayInjuries.length} sakatlık',
       };
     } catch (e) {
-      print('⚠️ İstatistik toplama hatası: $e');
+      if (kDebugMode) {
+        print('⚠️ İstatistik toplama hatası: $e');
+      }
     }
     
     return stats;
@@ -184,6 +195,7 @@ class AnalysisService {
     
     final results = matches.take(5).map((match) {
       final homeTeam = match['teams']['home'];
+      // ignore: unused_local_variable
       final awayTeam = match['teams']['away'];
       final homeGoals = match['goals']['home'] ?? 0;
       final awayGoals = match['goals']['away'] ?? 0;
@@ -208,12 +220,13 @@ class AnalysisService {
     
     for (var match in matches.take(5)) {
       final homeTeam = match['teams']['home'];
+      // ignore: unused_local_variable
       final awayTeam = match['teams']['away'];
       final homeGoals = match['goals']['home'] ?? 0;
       final awayGoals = match['goals']['away'] ?? 0;
       
       final isHome = homeTeam['id'] == teamId;
-      totalGoals += isHome ? homeGoals : awayGoals;
+      totalGoals += (isHome ? homeGoals : awayGoals) as int;
     }
     
     return totalGoals / matches.length;
@@ -263,9 +276,14 @@ class AnalysisService {
       homeTeam: homeTeam,
       awayTeam: awayTeam,
       userPrediction: userPrediction,
-      geminiPrediction: analysis['prediction']['type'] ?? userPrediction,
-      successProbability: (analysis['prediction']['confidence'] ?? 50).toDouble(),
+      aiPrediction: analysis['prediction']['type'] ?? userPrediction,
+      confidence: (analysis['prediction']['confidence'] ?? 50).toDouble(),
       reasoning: analysis['reasoning'] ?? 'Detaylı analiz yapılamadı.',
+      alternativePredictions: List<String>.from(analysis['alternatives'] ?? []),
+      risk: RiskAnalysis(
+        level: analysis['risk']['level'] ?? 'medium',
+        factors: List<String>.from(analysis['risk']['factors'] ?? []),
+      ),
     );
   }
   
@@ -279,9 +297,14 @@ class AnalysisService {
       homeTeam: homeTeam,
       awayTeam: awayTeam,
       userPrediction: userPrediction,
-      geminiPrediction: userPrediction,
-      successProbability: 50.0,
+      aiPrediction: userPrediction,
+      confidence: 50.0,
       reasoning: 'Bu maç için detaylı istatistik bulunamadı. Tahmininiz orta risk seviyesinde.',
+      alternativePredictions: [],
+      risk: RiskAnalysis(
+        level: 'medium',
+        factors: ['Veri eksikliği'],
+      ),
     );
   }
   
@@ -291,10 +314,19 @@ class AnalysisService {
     
     final total = predictions.fold<double>(
       0.0,
-      (sum, p) => sum + p.successProbability,
+      (sum, p) => sum + p.confidence,
     );
     
     return total / predictions.length;
+  }
+  
+  // En riskli tahminleri bul
+  List<String> _findRiskiestPicks(List<MatchPrediction> predictions) {
+    final risky = predictions
+        .where((p) => p.confidence < 60.0)
+        .map((p) => '${p.homeTeam} vs ${p.awayTeam}')
+        .toList();
+    return risky;
   }
   
   // Takım ismini normalize et

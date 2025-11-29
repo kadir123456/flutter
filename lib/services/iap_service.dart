@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
@@ -42,20 +43,21 @@ class InAppPurchaseService {
   Future<void> initialize() async {
     try {
       // Android için ekstra ayarlar
+      // NOT: enablePendingPurchases() artık gerekli değil, otomatik aktif
       if (Platform.isAndroid) {
         final InAppPurchaseAndroidPlatformAddition androidAddition =
             _inAppPurchase
                 .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
         
-        // Pending purchases kontrolü
-        await androidAddition.enablePendingPurchases();
+        // Android platform eklentisi hazır
+        debugPrint('Android IAP platform eklentisi yüklendi');
       }
       
       // Store bağlantısını kontrol et
       _isAvailable = await _inAppPurchase.isAvailable();
       
       if (!_isAvailable) {
-        print('❌ In-App Purchase kullanılamıyor');
+        debugPrint('❌ In-App Purchase kullanılamıyor');
         return;
       }
       
@@ -67,14 +69,14 @@ class InAppPurchaseService {
         _onPurchaseUpdate,
         onDone: () => _subscription.cancel(),
         onError: (error) {
-          print('❌ Purchase stream error: $error');
+          debugPrint('❌ Purchase stream error: $error');
           onPurchaseError?.call(error.toString());
         },
       );
       
-      print('✅ In-App Purchase başlatıldı');
+      debugPrint('✅ In-App Purchase başlatıldı');
     } catch (e) {
-      print('❌ In-App Purchase başlatma hatası: $e');
+      debugPrint('❌ In-App Purchase başlatma hatası: $e');
     }
   }
   
@@ -85,23 +87,23 @@ class InAppPurchaseService {
           .queryProductDetails(_productIds);
       
       if (response.notFoundIDs.isNotEmpty) {
-        print('⚠️ Bulunamayan ürünler: ${response.notFoundIDs}');
+        debugPrint('⚠️ Bulunamayan ürünler: ${response.notFoundIDs}');
       }
       
       if (response.error != null) {
-        print('❌ Ürün yükleme hatası: ${response.error}');
+        debugPrint('❌ Ürün yükleme hatası: ${response.error}');
         return;
       }
       
       _products = response.productDetails;
-      print('✅ ${_products.length} ürün yüklendi');
+      debugPrint('✅ ${_products.length} ürün yüklendi');
       
       // Ürünleri log'la
       for (var product in _products) {
-        print('  - ${product.id}: ${product.title} - ${product.price}');
+        debugPrint('  - ${product.id}: ${product.title} - ${product.price}');
       }
     } catch (e) {
-      print('❌ Ürün yükleme exception: $e');
+      debugPrint('❌ Ürün yükleme exception: $e');
     }
   }
   
@@ -135,7 +137,7 @@ class InAppPurchaseService {
         );
       }
     } catch (e) {
-      print('❌ Satın alma hatası: $e');
+      debugPrint('❌ Satın alma hatası: $e');
       _purchasePending = false;
       onPurchaseError?.call(e.toString());
       return false;
@@ -170,9 +172,9 @@ class InAppPurchaseService {
   Future<void> restorePurchases() async {
     try {
       await _inAppPurchase.restorePurchases();
-      print('✅ Satın almalar geri yüklendi');
+      debugPrint('✅ Satın almalar geri yüklendi');
     } catch (e) {
-      print('❌ Geri yükleme hatası: $e');
+      debugPrint('❌ Geri yükleme hatası: $e');
       onPurchaseError?.call(e.toString());
     }
   }

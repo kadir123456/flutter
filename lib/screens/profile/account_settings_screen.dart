@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/auth_provider.dart' as app_auth;
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -19,7 +19,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    final authProvider = context.read<AuthProvider>();
+    final authProvider = context.read<app_auth.AuthProvider>();
     _nameController.text = authProvider.userModel?.displayName ?? '';
     _emailController.text = authProvider.user?.email ?? '';
   }
@@ -33,7 +33,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
+    final authProvider = context.watch<app_auth.AuthProvider>();
     final user = authProvider.user;
 
     return Scaffold(
@@ -54,7 +54,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   children: [
                     CircleAvatar(
                       radius: 60,
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                      backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                       backgroundImage: user?.photoURL != null
                           ? NetworkImage(user!.photoURL!)
                           : null,
@@ -186,7 +186,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(Icons.lock_outline, color: Colors.orange),
@@ -204,7 +204,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(Icons.delete_outline, color: Colors.red),
@@ -259,23 +259,24 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   void _changePassword() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Şifre Değiştir'),
         content: const Text('Şifrenizi değiştirmek için e-postanıza bir sıfırlama bağlantısı gönderilecek.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('İptal'),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              final scaffoldContext = context;
+              Navigator.pop(dialogContext);
               try {
                 final email = FirebaseAuth.instance.currentUser?.email;
                 if (email != null) {
                   await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
                       const SnackBar(
                         content: Text('Şifre sıfırlama e-postası gönderildi'),
                         backgroundColor: Colors.green,
@@ -285,7 +286,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(scaffoldContext).showSnackBar(
                     SnackBar(
                       content: Text('Hata: $e'),
                       backgroundColor: Colors.red,
