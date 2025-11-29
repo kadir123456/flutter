@@ -7,6 +7,7 @@ import '../../screens/profile/credit_history_screen.dart';
 import '../../screens/analysis/analysis_screen.dart';
 import '../../screens/history/history_screen.dart';
 import '../../screens/upload/upload_screen.dart';
+import '../../screens/subscription/subscription_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -45,6 +46,10 @@ final router = GoRouter(
     GoRoute(
       path: '/history',
       builder: (context, state) => const HistoryScreen(),
+    ),
+    GoRoute(
+      path: '/subscription',
+      builder: (context, state) => const SubscriptionScreen(),
     ),
   ],
 );

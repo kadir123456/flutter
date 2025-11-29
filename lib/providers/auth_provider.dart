@@ -26,7 +26,6 @@ class AuthProvider extends ChangeNotifier {
   bool get canAnalyze => _userModel?.canAnalyze ?? false;
   
   AuthProvider() {
-    // Auth durumu değişikliklerini dinle
     _auth.authStateChanges().listen((User? user) async {
       _user = user;
       
@@ -40,7 +39,6 @@ class AuthProvider extends ChangeNotifier {
     });
   }
   
-  // User model'i yükle
   Future<void> _loadUserModel(String uid) async {
     try {
       final userModel = await _userService.getUser(uid);
@@ -51,7 +49,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // User model'i realtime dinle
   void listenToUserModel(String uid) {
     _userService.getUserStream(uid).listen((userModel) {
       _userModel = userModel;
@@ -59,7 +56,6 @@ class AuthProvider extends ChangeNotifier {
     });
   }
   
-  // E-posta ile kayıt
   Future<bool> signUpWithEmail({
     required String email,
     required String password,
@@ -75,26 +71,23 @@ class AuthProvider extends ChangeNotifier {
         password: password,
       );
       
-      // Kullanıcı adını güncelle
       await userCredential.user?.updateDisplayName(name);
       await userCredential.user?.reload();
       _user = _auth.currentUser;
       
-      // Firestore'da kullanıcı oluştur
       if (_user != null) {
         final newUser = UserModel(
           uid: _user!.uid,
           email: _user!.email ?? email,
           displayName: name,
           photoUrl: _user!.photoURL,
-          credits: 3, // İlk kayıtta 3 kredi
+          credits: 3,
           createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
         );
         
         await _userService.createOrUpdateUser(newUser);
         
-        // Hoşgeldin bonusu kaydı
         await _userService.addCredits(
           userId: _user!.uid,
           amount: 3,
@@ -122,7 +115,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // E-posta ile giriş
   Future<bool> signInWithEmail({
     required String email,
     required String password,
@@ -140,13 +132,12 @@ class AuthProvider extends ChangeNotifier {
       _user = _auth.currentUser;
       
       if (_user != null) {
-        // Son giriş zamanını güncelle
         await _userService.createOrUpdateUser(UserModel(
           uid: _user!.uid,
           email: _user!.email ?? email,
           displayName: _user!.displayName,
           photoUrl: _user!.photoURL,
-          createdAt: DateTime.now(), // Merge olacak
+          createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
         ));
         
@@ -170,7 +161,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Google ile giriş
   Future<bool> signInWithGoogle() async {
     try {
       _isLoading = true;
@@ -196,11 +186,9 @@ class AuthProvider extends ChangeNotifier {
       _user = userCredential.user;
       
       if (_user != null) {
-        // Yeni kullanıcı mı kontrol et
         final existingUser = await _userService.getUser(_user!.uid);
         
         if (existingUser == null) {
-          // Yeni kullanıcı - hoşgeldin bonusu ver
           final newUser = UserModel(
             uid: _user!.uid,
             email: _user!.email ?? '',
@@ -220,7 +208,6 @@ class AuthProvider extends ChangeNotifier {
             description: 'Hoşgeldin bonusu - İlk 3 ücretsiz analiz',
           );
         } else {
-          // Mevcut kullanıcı - son giriş güncelle
           await _userService.createOrUpdateUser(UserModel(
             uid: _user!.uid,
             email: _user!.email ?? '',
@@ -246,7 +233,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Çıkış yap
   Future<void> signOut() async {
     try {
       await _auth.signOut();
@@ -260,7 +246,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Şifre sıfırlama
   Future<bool> resetPassword(String email) async {
     try {
       _isLoading = true;
@@ -280,7 +265,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Kredi kullan
   Future<bool> useCredit({String? analysisId}) async {
     if (_user == null) return false;
     
@@ -296,7 +280,6 @@ class AuthProvider extends ChangeNotifier {
     return success;
   }
   
-  // Kredi ekle
   Future<bool> addCredits(int amount, String productId, String purchaseId) async {
     if (_user == null) return false;
     
@@ -316,7 +299,6 @@ class AuthProvider extends ChangeNotifier {
     return success;
   }
   
-  // Premium aktive et
   Future<bool> activatePremium(int days, String productId, String purchaseId) async {
     if (_user == null) return false;
     
@@ -334,7 +316,15 @@ class AuthProvider extends ChangeNotifier {
     return success;
   }
   
-  // Hata mesajlarını Türkçeleştir
+  // Alternatif metod isimleri (LoginScreen için gerekli)
+  Future<bool> signInWithEmailAndPassword(String email, String password) async {
+    return await signInWithEmail(email: email, password: password);
+  }
+  
+  Future<bool> sendPasswordResetEmail(String email) async {
+    return await resetPassword(email);
+  }
+  
   String _getErrorMessage(String code) {
     switch (code) {
       case 'weak-password':
@@ -356,13 +346,11 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Hata mesajını temizle
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
   
-  // User model'i manuel yenile
   Future<void> refreshUserModel() async {
     if (_user != null) {
       await _loadUserModel(_user!.uid);

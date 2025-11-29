@@ -10,16 +10,13 @@ import 'providers/bulletin_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Firebase init
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
-  // Remote Config init (API keys için)
   final remoteConfig = RemoteConfigService();
   await remoteConfig.initialize();
   
-  // Debug: Config değerlerini göster (production'da kaldır)
   if (const bool.fromEnvironment('dart.vm.product') == false) {
     remoteConfig.printAllConfigs();
   }

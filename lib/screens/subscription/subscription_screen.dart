@@ -6,8 +6,8 @@ class SubscriptionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Abonelik')),
-      body: const Center(child: Text('Subscription Screen - Yakında')),
+      appBar: AppBar(title: const Text('Premium Paketler')),
+      body: const Center(child: Text('Subscription Screen - Yakında Eklenecek')),
     );
   }
 }

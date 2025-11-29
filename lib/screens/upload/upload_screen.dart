@@ -1,8 +1,8 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bulletin_provider.dart';
@@ -20,7 +20,6 @@ class _UploadScreenState extends State<UploadScreen> {
   String? _imageName;
   bool _isUploading = false;
 
-  // Galeri veya kameradan görsel seç
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
@@ -49,7 +48,6 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  // Firebase Storage'a yükle
   Future<void> _uploadImage() async {
     if (_imageBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -69,36 +67,19 @@ class _UploadScreenState extends State<UploadScreen> {
         throw Exception('Kullanıcı girişi yapılmamış');
       }
 
-      // Benzersiz dosya adı oluştur
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'bulletins/$userId/$timestamp-$_imageName';
+      // Base64 encode (Storage kullanmıyoruz)
+      final base64Image = base64Encode(_imageBytes!);
 
-      // Firebase Storage'a yükle
-      final storageRef = FirebaseStorage.instance.ref().child(fileName);
-      final uploadTask = storageRef.putData(
-        _imageBytes!,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
-      // Yükleme ilerlemesini dinle
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-        print('Yükleme ilerlemesi: ${(progress * 100).toStringAsFixed(0)}%');
-      });
-
-      // Yükleme tamamlanana kadar bekle
-      final snapshot = await uploadTask;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-
-      print('✅ Görsel yüklendi: $downloadUrl');
-
-      // Firestore'a bülten kaydı oluştur
+      // Firestore'a bülten kaydı oluştur (imageUrl boş)
       final bulletinId = await bulletinProvider.createBulletin(
         userId: userId,
-        imageUrl: downloadUrl,
+        imageUrl: '', // Base64 kullandığımız için URL yok
       );
 
       if (bulletinId != null && mounted) {
+        // Kredi düş
+        await authProvider.useCredit(analysisId: bulletinId);
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Bülten başarıyla yüklendi!'),
@@ -137,7 +118,6 @@ class _UploadScreenState extends State<UploadScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Açıklama
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -170,7 +150,6 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Görsel önizleme
             if (_imageBytes != null) ...[
               Container(
                 height: 400,
@@ -223,7 +202,6 @@ class _UploadScreenState extends State<UploadScreen> {
               const SizedBox(height: 24),
             ],
 
-            // Görsel seçme butonları
             Row(
               children: [
                 Expanded(
@@ -255,7 +233,6 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Yükle butonu
             ElevatedButton.icon(
               onPressed: (_imageBytes == null || _isUploading)
                   ? null

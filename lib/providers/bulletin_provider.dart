@@ -5,12 +5,12 @@ import '../models/bulletin_model.dart';
 class BulletinProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
-  List<Bulletin> _bulletins = [];
+  List<BulletinModel> _bulletins = [];
   bool _isLoading = false;
   String? _errorMessage;
   
   // Getters
-  List<Bulletin> get bulletins => _bulletins;
+  List<BulletinModel> get bulletins => _bulletins;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   
@@ -28,7 +28,7 @@ class BulletinProvider extends ChangeNotifier {
           .get();
       
       _bulletins = querySnapshot.docs
-          .map((doc) => Bulletin.fromFirestore(doc))
+          .map((doc) => BulletinModel.fromFirestore(doc))
           .toList();
       
       _isLoading = false;
@@ -43,7 +43,7 @@ class BulletinProvider extends ChangeNotifier {
   // Yeni bülten oluştur
   Future<String?> createBulletin({
     required String userId,
-    required String imageUrl,
+    String? imageUrl,
   }) async {
     try {
       _isLoading = true;
@@ -52,10 +52,10 @@ class BulletinProvider extends ChangeNotifier {
       
       final docRef = await _firestore.collection('bulletins').add({
         'userId': userId,
-        'imageUrl': imageUrl,
+        'imageUrl': imageUrl ?? '',
         'status': 'pending', // pending, analyzing, completed, failed
         'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'analyzedAt': null,
       });
       
       _isLoading = false;
@@ -75,21 +75,15 @@ class BulletinProvider extends ChangeNotifier {
     try {
       await _firestore.collection('bulletins').doc(bulletinId).update({
         'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'analyzedAt': status == 'completed' ? FieldValue.serverTimestamp() : null,
       });
       
       // Listeyi güncelle
       final index = _bulletins.indexWhere((b) => b.id == bulletinId);
       if (index != -1) {
-        final oldBulletin = _bulletins[index];
-        _bulletins[index] = Bulletin(
-          id: oldBulletin.id,
-          userId: oldBulletin.userId,
-          imageUrl: oldBulletin.imageUrl,
+        _bulletins[index] = _bulletins[index].copyWith(
           status: status,
-          createdAt: oldBulletin.createdAt,
-          updatedAt: DateTime.now(),
-          analysis: oldBulletin.analysis,
+          analyzedAt: status == 'completed' ? DateTime.now() : null,
         );
         notifyListeners();
       }
@@ -101,27 +95,22 @@ class BulletinProvider extends ChangeNotifier {
   // Bülten analizini güncelle
   Future<void> updateBulletinAnalysis(
     String bulletinId,
-    BulletinAnalysis analysis,
+    Map<String, dynamic> analysis,
   ) async {
     try {
       await _firestore.collection('bulletins').doc(bulletinId).update({
         'status': 'completed',
-        'analysis': analysis.toMap(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'analysis': analysis,
+        'analyzedAt': FieldValue.serverTimestamp(),
       });
       
       // Listeyi güncelle
       final index = _bulletins.indexWhere((b) => b.id == bulletinId);
       if (index != -1) {
-        final oldBulletin = _bulletins[index];
-        _bulletins[index] = Bulletin(
-          id: oldBulletin.id,
-          userId: oldBulletin.userId,
-          imageUrl: oldBulletin.imageUrl,
+        _bulletins[index] = _bulletins[index].copyWith(
           status: 'completed',
-          createdAt: oldBulletin.createdAt,
-          updatedAt: DateTime.now(),
           analysis: analysis,
+          analyzedAt: DateTime.now(),
         );
         notifyListeners();
       }
@@ -132,12 +121,12 @@ class BulletinProvider extends ChangeNotifier {
   }
   
   // Bülten detayını getir
-  Future<Bulletin?> getBulletin(String bulletinId) async {
+  Future<BulletinModel?> getBulletin(String bulletinId) async {
     try {
       final doc = await _firestore.collection('bulletins').doc(bulletinId).get();
       
       if (doc.exists) {
-        return Bulletin.fromFirestore(doc);
+        return BulletinModel.fromFirestore(doc);
       }
       return null;
     } catch (e) {
@@ -164,12 +153,12 @@ class BulletinProvider extends ChangeNotifier {
   }
   
   // Bülten stream'i dinle (realtime)
-  Stream<Bulletin?> getBulletinStream(String bulletinId) {
+  Stream<BulletinModel?> getBulletinStream(String bulletinId) {
     return _firestore
         .collection('bulletins')
         .doc(bulletinId)
         .snapshots()
-        .map((doc) => doc.exists ? Bulletin.fromFirestore(doc) : null);
+        .map((doc) => doc.exists ? BulletinModel.fromFirestore(doc) : null);
   }
   
   // Hata mesajını temizle

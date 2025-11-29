@@ -3,12 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class BulletinModel {
   final String id;
   final String userId;
-  final String? imageUrl; // OPSIYONEL - Storage kullanmıyoruz
-  final String status; // pending, analyzing, completed, failed
+  final String? imageUrl;
+  final String status;
   final DateTime createdAt;
   final DateTime? analyzedAt;
-  
-  // Analiz sonuçları
   final Map<String, dynamic>? analysis;
   
   BulletinModel({
@@ -21,14 +19,13 @@ class BulletinModel {
     this.analysis,
   });
   
-  // Firestore'dan nesne oluştur
   factory BulletinModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     
     return BulletinModel(
       id: doc.id,
       userId: data['userId'] ?? '',
-      imageUrl: data['imageUrl'], // null olabilir
+      imageUrl: data['imageUrl'],
       status: data['status'] ?? 'pending',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       analyzedAt: (data['analyzedAt'] as Timestamp?)?.toDate(),
@@ -36,11 +33,10 @@ class BulletinModel {
     );
   }
   
-  // Firestore'a kaydet
   Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
-      'imageUrl': imageUrl ?? '', // Boş string olabilir
+      'imageUrl': imageUrl ?? '',
       'status': status,
       'createdAt': Timestamp.fromDate(createdAt),
       'analyzedAt': analyzedAt != null ? Timestamp.fromDate(analyzedAt!) : null,
@@ -48,7 +44,6 @@ class BulletinModel {
     };
   }
   
-  // Kopyalama (güncelleme için)
   BulletinModel copyWith({
     String? id,
     String? userId,
@@ -70,7 +65,6 @@ class BulletinModel {
   }
 }
 
-// Analiz detay modelleri
 class BulletinAnalysis {
   final List<MatchPrediction> predictions;
   final OverallAssessment overall;
@@ -95,14 +89,21 @@ class BulletinAnalysis {
       'overall': overall.toJson(),
     };
   }
+  
+  // toMap metodu eklendi (bulletin_provider için gerekli)
+  Map<String, dynamic> toMap() => toJson();
+  
+  // fromMap metodu eklendi
+  factory BulletinAnalysis.fromMap(Map<String, dynamic> map) => 
+      BulletinAnalysis.fromJson(map);
 }
 
 class MatchPrediction {
   final String homeTeam;
   final String awayTeam;
-  final String userPrediction; // 1, X, 2, Alt, Üst, KG Var
+  final String userPrediction;
   final String aiPrediction;
-  final double confidence; // 0-100
+  final double confidence;
   final String reasoning;
   final List<String> alternativePredictions;
   final RiskAnalysis risk;
@@ -146,7 +147,7 @@ class MatchPrediction {
 }
 
 class RiskAnalysis {
-  final String level; // low, medium, high
+  final String level;
   final List<String> factors;
   
   RiskAnalysis({
@@ -170,7 +171,7 @@ class RiskAnalysis {
 }
 
 class OverallAssessment {
-  final double successProbability; // 0-100
+  final double successProbability;
   final List<String> riskiestPicks;
   final String strategy;
   

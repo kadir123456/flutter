@@ -16,12 +16,10 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('AI Spor Pro'),
         actions: [
-          // Kredi Widget
           const Padding(
             padding: EdgeInsets.only(right: 8),
             child: CreditsWidget(),
           ),
-          // Profil Butonu
           IconButton(
             icon: const Icon(Icons.person_outline),
             onPressed: () => context.push('/profile'),
@@ -32,7 +30,6 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Hoşgeldin Kartı
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(24),
@@ -103,7 +100,6 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
 
-            // Hızlı Aksiyonlar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -117,7 +113,6 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Ana Aksiyon Butonları
                   Row(
                     children: [
                       Expanded(
@@ -132,11 +127,11 @@ class HomeScreen extends StatelessWidget {
                               context.push('/upload');
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Analiz için kredi satın alın'),
+                                SnackBar(
+                                  content: const Text('Analiz için kredi satın alın'),
                                   action: SnackBarAction(
                                     label: 'Satın Al',
-                                    onPressed: null,
+                                    onPressed: () => context.push('/subscription'),
                                   ),
                                 ),
                               );
@@ -188,7 +183,6 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // İstatistikler
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -247,7 +241,6 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // Premium Tanıtımı (Eğer premium değilse)
             if (!authProvider.isPremium)
               Container(
                 margin: const EdgeInsets.all(16),
@@ -318,7 +311,6 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
-            // Footer
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
