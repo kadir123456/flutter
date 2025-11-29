@@ -14,6 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
@@ -23,175 +24,250 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.signInWithEmail(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
+    setState(() => _isLoading = true);
 
-    if (success && mounted) {
-      context.go('/home');
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.errorMessage ?? 'Giriş başarısız'),
-          backgroundColor: Colors.red,
-        ),
+    try {
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.signInWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text,
       );
+
+      if (mounted && authProvider.user != null) {
+        context.go('/home');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Giriş hatası: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.signInWithGoogle();
-
-    if (success && mounted) {
-      context.go('/home');
-    } else if (mounted) {
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    
+    if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.errorMessage ?? 'Google ile giriş başarısız'),
-          backgroundColor: Colors.red,
+        const SnackBar(
+          content: Text('Lütfen e-posta adresinizi girin'),
+          backgroundColor: Colors.orange,
         ),
       );
+      return;
+    }
+
+    // E-posta formatı kontrolü
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Geçerli bir e-posta adresi girin'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.sendPasswordResetEmail(email);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Şifre sıfırlama bağlantısı $email adresine gönderildi'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Logo ve Başlık
-                    Icon(
-                      Icons.sports_soccer,
-                      size: 80,
-                      color: Theme.of(context).primaryColor,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Logo
+                  Icon(
+                    Icons.sports_soccer,
+                    size: 80,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Başlık
+                  Text(
+                    'AI Spor Pro',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'AI Spor Analiz',
-                      style: Theme.of(context).textTheme.displayMedium,
-                      textAlign: TextAlign.center,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Giriş Yap',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.grey[600],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Yapay zeka destekli spor tahmin analizi',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 48),
-
-                    // E-posta
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'E-posta',
-                        prefixIcon: Icon(Icons.email),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 48),
+                  
+                  // E-posta
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'E-posta',
+                      hintText: 'ornek@email.com',
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'E-posta gerekli';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Geçerli bir e-posta girin';
-                        }
-                        return null;
-                      },
                     ),
-                    const SizedBox(height: 16),
-
-                    // Şifre
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Şifre',
-                        prefixIcon: const Icon(Icons.lock),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'E-posta adresi gerekli';
+                      }
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                        return 'Geçerli bir e-posta adresi girin';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Şifre
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Şifre',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Şifre gerekli';
+                      }
+                      if (value.length < 6) {
+                        return 'Şifre en az 6 karakter olmalı';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Şifremi Unuttum
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _resetPassword,
+                      child: const Text('Şifremi Unuttum'),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Giriş Yap Butonu
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Giriş Yap',
+                            style: TextStyle(fontSize: 16),
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Kayıt Ol Linki
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Hesabınız yok mu? ',
+                        style: TextStyle(color: Colors.grey[600]),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Şifre gerekli';
-                        }
-                        if (value.length < 6) {
-                          return 'Şifre en az 6 karakter olmalı';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Giriş Butonu
-                    ElevatedButton(
-                      onPressed: authProvider.isLoading ? null : _handleLogin,
-                      child: authProvider.isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Giriş Yap'),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Google ile Giriş
-                    OutlinedButton.icon(
-                      onPressed: authProvider.isLoading ? null : _handleGoogleSignIn,
-                      icon: Image.network(
-                        'https://www.google.com/favicon.ico',
-                        height: 20,
+                      TextButton(
+                        onPressed: () => context.go('/register'),
+                        child: const Text('Kayıt Ol'),
                       ),
-                      label: const Text('Google ile Giriş'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 48),
+                  
+                  // Footer - Bilwin.inc
+                  Text(
+                    'Powered by Bilwin.inc',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 12,
                     ),
-                    const SizedBox(height: 24),
-
-                    // Kayıt Ol
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('Hesabınız yok mu? '),
-                        TextButton(
-                          onPressed: () => context.go('/register'),
-                          child: const Text('Kayıt Ol'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
           ),

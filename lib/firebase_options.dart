@@ -47,23 +47,23 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA_XKn4Ziha1OVOoPfILYGDoDUhOMnoRac',
-    appId: '1:530194632368:web:7d5f2c799db4322529b575',
-    messagingSenderId: '530194632368',
-    projectId: 'ai-spor-analiz-2024',
-    authDomain: 'ai-spor-analiz-2024.firebaseapp.com',
-    databaseURL: 'https://ai-spor-analiz-2024-default-rtdb.firebaseio.com',
-    storageBucket: 'ai-spor-analiz-2024.firebasestorage.app',
-    measurementId: 'G-DQQZVTCV9D',
+    apiKey: "AIzaSyCQnHUPj9a6XuLPeF419SrO_GmmjoN_IG8",
+    authDomain: "compelling-weft-470708-n8.firebaseapp.com",
+    databaseURL: "https://compelling-weft-470708-n8-default-rtdb.firebaseio.com",
+    projectId: "compelling-weft-470708-n8",
+    storageBucket: "compelling-weft-470708-n8.firebasestorage.app",
+    messagingSenderId: "10498248483",
+    appId: "1:10498248483:web:06ed48fb91d09e85304696",
+    measurementId: "G-86K7NLHNZG"
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBTnCsqYC2cIaqgpaZiMPdhRarg2Id7h-8',
-    appId: '1:530194632368:android:86a2e8c86a2db58f29b575',
-    messagingSenderId: '530194632368',
-    projectId: 'ai-spor-analiz-2024',
-    databaseURL: 'https://ai-spor-analiz-2024-default-rtdb.firebaseio.com',
-    storageBucket: 'ai-spor-analiz-2024.firebasestorage.app',
+    apiKey: 'AIzaSyCQnHUPj9a6XuLPeF419SrO_GmmjoN_IG8',
+    appId: '1:10498248483:web:06ed48fb91d09e85304696',
+    messagingSenderId: '10498248483',
+    projectId: 'compelling-weft-470708-n8',
+    databaseURL: 'https://compelling-weft-470708-n8-default-rtdb.firebaseio.com',
+    storageBucket: 'compelling-weft-470708-n8.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
