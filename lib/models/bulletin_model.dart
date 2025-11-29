@@ -1,10 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// Firebase Realtime Database için güncellendi - Firestore kaldırıldı
+// Görsel kaydedilmiyor, sadece analiz için kullanılıyor
 
 class BulletinModel {
   final String id;
   final String userId;
-  final String? imageUrl;
-  final String status;
+  final String status; // pending, analyzing, completed, failed
   final DateTime createdAt;
   final DateTime? analyzedAt;
   final Map<String, dynamic>? analysis;
@@ -12,34 +12,37 @@ class BulletinModel {
   BulletinModel({
     required this.id,
     required this.userId,
-    this.imageUrl,
     required this.status,
     required this.createdAt,
     this.analyzedAt,
     this.analysis,
   });
   
-  factory BulletinModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
+  // Realtime Database'den oluştur
+  factory BulletinModel.fromJson(String id, Map<String, dynamic> data) {
     return BulletinModel(
-      id: doc.id,
+      id: id,
       userId: data['userId'] ?? '',
-      imageUrl: data['imageUrl'],
       status: data['status'] ?? 'pending',
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      analyzedAt: (data['analyzedAt'] as Timestamp?)?.toDate(),
-      analysis: data['analysis'] as Map<String, dynamic>?,
+      createdAt: data['createdAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(data['createdAt'] as int)
+          : DateTime.now(),
+      analyzedAt: data['analyzedAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(data['analyzedAt'] as int)
+          : null,
+      analysis: data['analysis'] != null 
+          ? Map<String, dynamic>.from(data['analysis'])
+          : null,
     );
   }
   
-  Map<String, dynamic> toFirestore() {
+  // Realtime Database'e kaydet
+  Map<String, dynamic> toMap() {
     return {
       'userId': userId,
-      'imageUrl': imageUrl ?? '',
       'status': status,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'analyzedAt': analyzedAt != null ? Timestamp.fromDate(analyzedAt!) : null,
+      'createdAt': createdAt.millisecondsSinceEpoch,
+      'analyzedAt': analyzedAt?.millisecondsSinceEpoch,
       'analysis': analysis,
     };
   }

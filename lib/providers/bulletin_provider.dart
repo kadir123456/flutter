@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../models/bulletin_model.dart';
 
 class BulletinProvider extends ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseDatabase _database = FirebaseDatabase.instance;
   
   List<BulletinModel> _bulletins = [];
   bool _isLoading = false;
@@ -21,51 +21,62 @@ class BulletinProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
       
-      final querySnapshot = await _firestore
-          .collection('bulletins')
-          .where('userId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
-          .get();
+      final ref = _database.ref('bulletins');
+      final query = ref.orderByChild('userId').equalTo(userId);
+      final snapshot = await query.get();
       
-      _bulletins = querySnapshot.docs
-          .map((doc) => BulletinModel.fromFirestore(doc))
-          .toList();
+      _bulletins = [];
+      
+      if (snapshot.exists && snapshot.value != null) {
+        final data = Map<String, dynamic>.from(snapshot.value as Map);
+        data.forEach((key, value) {
+          final bulletinData = Map<String, dynamic>.from(value as Map);
+          _bulletins.add(BulletinModel.fromJson(key, bulletinData));
+        });
+        
+        // Tarihe göre sırala (yeniden eskiye)
+        _bulletins.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      }
       
       _isLoading = false;
       notifyListeners();
+      print('✅ ${_bulletins.length} bülten yüklendi');
     } catch (e) {
       _isLoading = false;
       _errorMessage = 'Bültenler yüklenirken hata oluştu: $e';
       notifyListeners();
+      print('❌ Bülten yükleme hatası: $e');
     }
   }
   
-  // Yeni bülten oluştur
+  // Yeni bülten oluştur (görsel kaydedilmiyor)
   Future<String?> createBulletin({
     required String userId,
-    String? imageUrl,
   }) async {
     try {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
       
-      final docRef = await _firestore.collection('bulletins').add({
+      final ref = _database.ref('bulletins').push();
+      await ref.set({
         'userId': userId,
-        'imageUrl': imageUrl ?? '',
         'status': 'pending', // pending, analyzing, completed, failed
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
         'analyzedAt': null,
+        'analysis': null,
       });
       
       _isLoading = false;
       notifyListeners();
       
-      return docRef.id;
+      print('✅ Yeni bülten oluşturuldu: ${ref.key}');
+      return ref.key;
     } catch (e) {
       _isLoading = false;
       _errorMessage = 'Bülten oluşturulurken hata oluştu: $e';
       notifyListeners();
+      print('❌ Bülten oluşturma hatası: $e');
       return null;
     }
   }
@@ -73,9 +84,10 @@ class BulletinProvider extends ChangeNotifier {
   // Bülten durumunu güncelle
   Future<void> updateBulletinStatus(String bulletinId, String status) async {
     try {
-      await _firestore.collection('bulletins').doc(bulletinId).update({
+      final ref = _database.ref('bulletins/$bulletinId');
+      await ref.update({
         'status': status,
-        'analyzedAt': status == 'completed' ? FieldValue.serverTimestamp() : null,
+        'analyzedAt': status == 'completed' ? DateTime.now().millisecondsSinceEpoch : null,
       });
       
       // Listeyi güncelle
@@ -87,6 +99,8 @@ class BulletinProvider extends ChangeNotifier {
         );
         notifyListeners();
       }
+      
+      print('✅ Bülten durumu güncellendi: $status');
     } catch (e) {
       print('❌ Durum güncelleme hatası: $e');
     }
@@ -98,10 +112,11 @@ class BulletinProvider extends ChangeNotifier {
     Map<String, dynamic> analysis,
   ) async {
     try {
-      await _firestore.collection('bulletins').doc(bulletinId).update({
+      final ref = _database.ref('bulletins/$bulletinId');
+      await ref.update({
         'status': 'completed',
         'analysis': analysis,
-        'analyzedAt': FieldValue.serverTimestamp(),
+        'analyzedAt': DateTime.now().millisecondsSinceEpoch,
       });
       
       // Listeyi güncelle
@@ -114,6 +129,8 @@ class BulletinProvider extends ChangeNotifier {
         );
         notifyListeners();
       }
+      
+      print('✅ Bülten analizi güncellendi');
     } catch (e) {
       print('❌ Analiz güncelleme hatası: $e');
       await updateBulletinStatus(bulletinId, 'failed');
@@ -123,15 +140,18 @@ class BulletinProvider extends ChangeNotifier {
   // Bülten detayını getir
   Future<BulletinModel?> getBulletin(String bulletinId) async {
     try {
-      final doc = await _firestore.collection('bulletins').doc(bulletinId).get();
+      final ref = _database.ref('bulletins/$bulletinId');
+      final snapshot = await ref.get();
       
-      if (doc.exists) {
-        return BulletinModel.fromFirestore(doc);
+      if (snapshot.exists && snapshot.value != null) {
+        final data = Map<String, dynamic>.from(snapshot.value as Map);
+        return BulletinModel.fromJson(bulletinId, data);
       }
       return null;
     } catch (e) {
       _errorMessage = 'Bülten detayı alınırken hata oluştu: $e';
       notifyListeners();
+      print('❌ Bülten detay hatası: $e');
       return null;
     }
   }
@@ -139,26 +159,31 @@ class BulletinProvider extends ChangeNotifier {
   // Bülteni sil
   Future<bool> deleteBulletin(String bulletinId) async {
     try {
-      await _firestore.collection('bulletins').doc(bulletinId).delete();
+      final ref = _database.ref('bulletins/$bulletinId');
+      await ref.remove();
       
       _bulletins.removeWhere((b) => b.id == bulletinId);
       notifyListeners();
       
+      print('✅ Bülten silindi: $bulletinId');
       return true;
     } catch (e) {
       _errorMessage = 'Bülten silinirken hata oluştu: $e';
       notifyListeners();
+      print('❌ Bülten silme hatası: $e');
       return false;
     }
   }
   
   // Bülten stream'i dinle (realtime)
   Stream<BulletinModel?> getBulletinStream(String bulletinId) {
-    return _firestore
-        .collection('bulletins')
-        .doc(bulletinId)
-        .snapshots()
-        .map((doc) => doc.exists ? BulletinModel.fromFirestore(doc) : null);
+    return _database.ref('bulletins/$bulletinId').onValue.map((event) {
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        return BulletinModel.fromJson(bulletinId, data);
+      }
+      return null;
+    });
   }
   
   // Hata mesajını temizle

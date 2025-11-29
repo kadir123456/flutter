@@ -1,14 +1,22 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
+import 'remote_config_service.dart';
 
 class FootballApiService {
   final Dio _dio = Dio();
-  final String _apiKey = dotenv.env['API_FOOTBALL_KEY'] ?? '';
+  final RemoteConfigService _remoteConfig = RemoteConfigService();
   
   static const String _baseUrl = 'https://v3.football.api-sports.io';
   
+  // API key'i Remote Config'den al
+  String get _apiKey => _remoteConfig.footballApiKey;
+  
   FootballApiService() {
+    // Headers her request'te dinamik olarak ayarlanacak
+  }
+  
+  // Her request için headers'ı ayarla
+  void _setHeaders() {
     _dio.options.headers = {
       'x-rapidapi-key': _apiKey,
       'x-rapidapi-host': 'v3.football.api-sports.io',
@@ -18,6 +26,7 @@ class FootballApiService {
   // Takım arama (fuzzy matching ile)
   Future<Map<String, dynamic>?> searchTeam(String teamName) async {
     try {
+      _setHeaders(); // Headers'ı ayarla
       final response = await _dio.get(
         '$_baseUrl/teams',
         queryParameters: {
@@ -48,6 +57,7 @@ class FootballApiService {
     String? date,
   }) async {
     try {
+      _setHeaders(); // Headers'ı ayarla
       // Tarihi belirle (bugünden +/- 7 gün)
       final searchDate = date ?? DateTime.now().toIso8601String().split('T')[0];
       
@@ -83,6 +93,7 @@ class FootballApiService {
   // Maç istatistiklerini getir
   Future<Map<String, dynamic>?> getMatchStatistics(int fixtureId) async {
     try {
+      _setHeaders(); // Headers'ı ayarla
       final response = await _dio.get(
         '$_baseUrl/fixtures/statistics',
         queryParameters: {
@@ -104,6 +115,7 @@ class FootballApiService {
   // Takımın son maçları
   Future<List<Map<String, dynamic>>> getTeamLastMatches(int teamId, {int limit = 5}) async {
     try {
+      _setHeaders(); // Headers'ı ayarla
       final response = await _dio.get(
         '$_baseUrl/fixtures',
         queryParameters: {
@@ -126,6 +138,7 @@ class FootballApiService {
   // H2H (Head to Head) istatistikleri
   Future<List<Map<String, dynamic>>> getH2H(int team1Id, int team2Id) async {
     try {
+      _setHeaders(); // Headers'ı ayarla
       final response = await _dio.get(
         '$_baseUrl/fixtures/headtohead',
         queryParameters: {
@@ -147,6 +160,7 @@ class FootballApiService {
   // Takım sakatlık/ceza durumu
   Future<List<Map<String, dynamic>>> getTeamInjuries(int teamId) async {
     try {
+      _setHeaders(); // Headers'ı ayarla
       final response = await _dio.get(
         '$_baseUrl/injuries',
         queryParameters: {
@@ -168,6 +182,7 @@ class FootballApiService {
   // Puan durumu
   Future<Map<String, dynamic>?> getStandings(int leagueId, int season) async {
     try {
+      _setHeaders(); // Headers'ı ayarla
       final response = await _dio.get(
         '$_baseUrl/standings',
         queryParameters: {

@@ -67,28 +67,31 @@ class _UploadScreenState extends State<UploadScreen> {
         throw Exception('Kullanıcı girişi yapılmamış');
       }
 
-      // Base64 encode (Storage kullanmıyoruz)
+      // Base64 encode (görsel kaydedilmeyecek, sadece analiz için kullanılacak)
       final base64Image = base64Encode(_imageBytes!);
 
-      // Firestore'a bülten kaydı oluştur (imageUrl boş)
+      // Realtime Database'e bülten kaydı oluştur (görsel kaydedilmiyor)
       final bulletinId = await bulletinProvider.createBulletin(
         userId: userId,
-        imageUrl: '', // Base64 kullandığımız için URL yok
       );
 
       if (bulletinId != null && mounted) {
         // Kredi düş
-        await authProvider.useCredit(analysisId: bulletinId);
+        final creditUsed = await authProvider.useCredit(analysisId: bulletinId);
+        
+        if (!creditUsed) {
+          throw Exception('Kredi kullanılamadı. Yetersiz kredi veya hata oluştu.');
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Bülten başarıyla yüklendi!'),
+            content: Text('✅ Bülten başarıyla yüklendi! Analiz başlatılıyor...'),
             backgroundColor: Colors.green,
           ),
         );
 
-        // Analiz ekranına yönlendir
-        context.go('/analysis/$bulletinId');
+        // Analiz ekranına yönlendir (base64 image ile)
+        context.go('/analysis/$bulletinId', extra: base64Image);
       }
     } catch (e) {
       print('❌ Yükleme hatası: $e');

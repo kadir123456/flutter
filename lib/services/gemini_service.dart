@@ -1,12 +1,16 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'remote_config_service.dart';
 
 class GeminiAnalysisService {
   final Dio _dio = Dio();
-  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+  final RemoteConfigService _remoteConfig = RemoteConfigService();
   
   static const String _baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  static const String _model = 'gemini-2.5-pro'; // veya gemini-2.0-flash-exp
+  static const String _model = 'gemini-2.5-pro'; // Gemini 2.5 Pro yerine güncel model
+  
+  // API key'i Remote Config'den al
+  String get _apiKey => _remoteConfig.geminiApiKey;
   
   // Görsel analiz - maç bilgilerini çıkar
   Future<Map<String, dynamic>?> analyzeMatchImage(String base64Image) async {
@@ -74,12 +78,16 @@ JSON formatı:
             .replaceAll('```', '')
             .trim();
         
-        final jsonResponse = Map<String, dynamic>.from(
-          // JSON parse burada yapılacak
-          {}
-        );
-        
-        return jsonResponse;
+        // JSON parse et
+        try {
+          final jsonResponse = json.decode(cleanedText) as Map<String, dynamic>;
+          print('✅ Gemini görsel analizi başarılı: ${jsonResponse['totalMatches']} maç bulundu');
+          return jsonResponse;
+        } catch (e) {
+          print('❌ JSON parse hatası: $e');
+          print('Raw response: $cleanedText');
+          return null;
+        }
       }
       
       return null;
@@ -180,8 +188,16 @@ ${_formatStats(matchStats)}
             .replaceAll('```', '')
             .trim();
         
-        // JSON parse edilecek
-        return {};
+        // JSON parse et
+        try {
+          final analysisResult = json.decode(cleanedText) as Map<String, dynamic>;
+          print('✅ Gemini maç analizi başarılı');
+          return analysisResult;
+        } catch (e) {
+          print('❌ JSON parse hatası: $e');
+          print('Raw response: $cleanedText');
+          return null;
+        }
       }
       
       return null;

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// Firebase Realtime Database için güncellendi - Firestore kaldırıldı
 
 class UserModel {
   final String uid;
@@ -25,37 +25,39 @@ class UserModel {
     this.totalAnalysisCount = 0,
   });
   
-  // Firestore'dan user oluştur
-  factory UserModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
+  // Realtime Database'den user oluştur
+  factory UserModel.fromJson(String uid, Map<String, dynamic> data) {
     return UserModel(
-      uid: doc.id,
+      uid: uid,
       email: data['email'] ?? '',
       displayName: data['displayName'],
       photoUrl: data['photoUrl'],
       credits: data['credits'] ?? 3,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      lastLoginAt: (data['lastLoginAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: data['createdAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(data['createdAt'] as int)
+          : DateTime.now(),
+      lastLoginAt: data['lastLoginAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(data['lastLoginAt'] as int)
+          : DateTime.now(),
       isPremium: data['isPremium'] ?? false,
-      premiumExpiresAt: (data['premiumExpiresAt'] as Timestamp?)?.toDate(),
+      premiumExpiresAt: data['premiumExpiresAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(data['premiumExpiresAt'] as int)
+          : null,
       totalAnalysisCount: data['totalAnalysisCount'] ?? 0,
     );
   }
   
-  // Firestore'a kaydet
+  // Realtime Database'e kaydet
   Map<String, dynamic> toMap() {
     return {
       'email': email,
       'displayName': displayName,
       'photoUrl': photoUrl,
       'credits': credits,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'lastLoginAt': Timestamp.fromDate(lastLoginAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
+      'lastLoginAt': lastLoginAt.millisecondsSinceEpoch,
       'isPremium': isPremium,
-      'premiumExpiresAt': premiumExpiresAt != null 
-          ? Timestamp.fromDate(premiumExpiresAt!) 
-          : null,
+      'premiumExpiresAt': premiumExpiresAt?.millisecondsSinceEpoch,
       'totalAnalysisCount': totalAnalysisCount,
     };
   }

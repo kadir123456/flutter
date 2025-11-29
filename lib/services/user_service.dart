@@ -1,17 +1,16 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../models/user_model.dart';
 import '../models/credit_transaction_model.dart';
 
 class UserService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseDatabase _database = FirebaseDatabase.instance;
   
   // Kullanıcı oluştur veya güncelle
   Future<void> createOrUpdateUser(UserModel user) async {
     try {
-      await _firestore.collection('users').doc(user.uid).set(
-        user.toMap(),
-        SetOptions(merge: true),
-      );
+      final ref = _database.ref('users/${user.uid}');
+      await ref.update(user.toMap());
+      print('✅ Kullanıcı Realtime Database\'e kaydedildi: ${user.uid}');
     } catch (e) {
       print('❌ Kullanıcı oluşturma hatası: $e');
       rethrow;
@@ -21,10 +20,12 @@ class UserService {
   // Kullanıcı bilgilerini getir
   Future<UserModel?> getUser(String uid) async {
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
+      final ref = _database.ref('users/$uid');
+      final snapshot = await ref.get();
       
-      if (doc.exists) {
-        return UserModel.fromFirestore(doc);
+      if (snapshot.exists && snapshot.value != null) {
+        final data = Map<String, dynamic>.from(snapshot.value as Map);
+        return UserModel.fromJson(uid, data);
       }
       return null;
     } catch (e) {
@@ -35,11 +36,13 @@ class UserService {
   
   // Kullanıcı stream (real-time)
   Stream<UserModel?> getUserStream(String uid) {
-    return _firestore
-        .collection('users')
-        .doc(uid)
-        .snapshots()
-        .map((doc) => doc.exists ? UserModel.fromFirestore(doc) : null);
+    return _database.ref('users/$uid').onValue.map((event) {
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        return UserModel.fromJson(uid, data);
+      }
+      return null;
+    });
   }
   
   // Kredi ekle (satın alma, bonus vb.)
@@ -52,37 +55,36 @@ class UserService {
     String? purchaseId,
   }) async {
     try {
-      final userDoc = _firestore.collection('users').doc(userId);
+      final userRef = _database.ref('users/$userId');
+      final snapshot = await userRef.get();
       
-      return await _firestore.runTransaction((transaction) async {
-        final userSnapshot = await transaction.get(userDoc);
-        
-        if (!userSnapshot.exists) {
-          throw Exception('Kullanıcı bulunamadı');
-        }
-        
-        final user = UserModel.fromFirestore(userSnapshot);
-        final newCredits = user.credits + amount;
-        
-        // Kullanıcı kredisini güncelle
-        transaction.update(userDoc, {'credits': newCredits});
-        
-        // İşlem kaydı oluştur
-        final transactionDoc = _firestore.collection('credit_transactions').doc();
-        transaction.set(transactionDoc, CreditTransaction(
-          id: transactionDoc.id,
-          userId: userId,
-          type: type,
-          amount: amount,
-          balanceAfter: newCredits,
-          createdAt: DateTime.now(),
-          description: description,
-          productId: productId,
-          purchaseId: purchaseId,
-        ).toMap());
-        
-        return true;
-      });
+      if (!snapshot.exists || snapshot.value == null) {
+        throw Exception('Kullanıcı bulunamadı');
+      }
+      
+      final userData = Map<String, dynamic>.from(snapshot.value as Map);
+      final user = UserModel.fromJson(userId, userData);
+      final newCredits = user.credits + amount;
+      
+      // Kullanıcı kredisini güncelle
+      await userRef.update({'credits': newCredits});
+      
+      // İşlem kaydı oluştur
+      final transactionRef = _database.ref('credit_transactions').push();
+      await transactionRef.set(CreditTransaction(
+        id: transactionRef.key ?? '',
+        userId: userId,
+        type: type,
+        amount: amount,
+        balanceAfter: newCredits,
+        createdAt: DateTime.now(),
+        description: description,
+        productId: productId,
+        purchaseId: purchaseId,
+      ).toMap());
+      
+      print('✅ $amount kredi eklendi. Yeni bakiye: $newCredits');
+      return true;
     } catch (e) {
       print('❌ Kredi ekleme hatası: $e');
       return false;
@@ -92,68 +94,69 @@ class UserService {
   // Kredi kullan (analiz)
   Future<bool> useCredit(String userId, {String? analysisId}) async {
     try {
-      final userDoc = _firestore.collection('users').doc(userId);
+      final userRef = _database.ref('users/$userId');
+      final snapshot = await userRef.get();
       
-      return await _firestore.runTransaction((transaction) async {
-        final userSnapshot = await transaction.get(userDoc);
-        
-        if (!userSnapshot.exists) {
-          throw Exception('Kullanıcı bulunamadı');
-        }
-        
-        final user = UserModel.fromFirestore(userSnapshot);
-        
-        // Premium kullanıcı veya kredi kontrolü
-        if (user.isActivePremium) {
-          // Premium kullanıcı, kredi düşmesin ama işlem sayısı artsın
-          transaction.update(userDoc, {
-            'totalAnalysisCount': user.totalAnalysisCount + 1,
-          });
-          
-          // Premium kullanım kaydı
-          final transactionDoc = _firestore.collection('credit_transactions').doc();
-          transaction.set(transactionDoc, CreditTransaction(
-            id: transactionDoc.id,
-            userId: userId,
-            type: TransactionType.usage,
-            amount: 0, // Premium için 0
-            balanceAfter: user.credits,
-            createdAt: DateTime.now(),
-            description: 'Premium analiz - kredi düşmedi',
-          ).toMap());
-          
-          return true;
-        }
-        
-        // Kredi kontrolü
-        if (user.credits <= 0) {
-          throw Exception('Yetersiz kredi');
-        }
-        
-        final newCredits = user.credits - 1;
-        
-        // Kullanıcı kredisini düş
-        transaction.update(userDoc, {
-          'credits': newCredits,
+      if (!snapshot.exists || snapshot.value == null) {
+        throw Exception('Kullanıcı bulunamadı');
+      }
+      
+      final userData = Map<String, dynamic>.from(snapshot.value as Map);
+      final user = UserModel.fromJson(userId, userData);
+      
+      // Premium kullanıcı kontrolü
+      if (user.isActivePremium) {
+        // Premium kullanıcı, kredi düşmesin ama işlem sayısı artsın
+        await userRef.update({
           'totalAnalysisCount': user.totalAnalysisCount + 1,
         });
         
-        // Kullanım kaydı
-        final transactionDoc = _firestore.collection('credit_transactions').doc();
-        transaction.set(transactionDoc, CreditTransaction(
-          id: transactionDoc.id,
+        // Premium kullanım kaydı
+        final transactionRef = _database.ref('credit_transactions').push();
+        await transactionRef.set(CreditTransaction(
+          id: transactionRef.key ?? '',
           userId: userId,
           type: TransactionType.usage,
-          amount: -1,
-          balanceAfter: newCredits,
+          amount: 0, // Premium için 0
+          balanceAfter: user.credits,
           createdAt: DateTime.now(),
-          description: analysisId != null 
-              ? 'Analiz ID: $analysisId' 
-              : 'Kredi kullanımı',
+          description: 'Premium analiz - kredi düşmedi',
         ).toMap());
         
+        print('✅ Premium kullanıcı - kredi düşmedi');
         return true;
+      }
+      
+      // Kredi kontrolü
+      if (user.credits <= 0) {
+        print('❌ Yetersiz kredi');
+        throw Exception('Yetersiz kredi');
+      }
+      
+      final newCredits = user.credits - 1;
+      
+      // Kullanıcı kredisini düş
+      await userRef.update({
+        'credits': newCredits,
+        'totalAnalysisCount': user.totalAnalysisCount + 1,
       });
+      
+      // Kullanım kaydı
+      final transactionRef = _database.ref('credit_transactions').push();
+      await transactionRef.set(CreditTransaction(
+        id: transactionRef.key ?? '',
+        userId: userId,
+        type: TransactionType.usage,
+        amount: -1,
+        balanceAfter: newCredits,
+        createdAt: DateTime.now(),
+        description: analysisId != null 
+            ? 'Analiz ID: $analysisId' 
+            : 'Kredi kullanımı',
+      ).toMap());
+      
+      print('✅ 1 kredi kullanıldı. Kalan: $newCredits');
+      return true;
     } catch (e) {
       print('❌ Kredi kullanma hatası: $e');
       return false;
@@ -169,27 +172,28 @@ class UserService {
   }) async {
     try {
       final expiresAt = DateTime.now().add(Duration(days: durationDays));
+      final userRef = _database.ref('users/$userId');
       
-      await _firestore.collection('users').doc(userId).update({
+      await userRef.update({
         'isPremium': true,
-        'premiumExpiresAt': Timestamp.fromDate(expiresAt),
+        'premiumExpiresAt': expiresAt.millisecondsSinceEpoch,
       });
       
       // Premium satın alma kaydı
-      await _firestore.collection('credit_transactions').add(
-        CreditTransaction(
-          id: '',
-          userId: userId,
-          type: TransactionType.purchase,
-          amount: 0,
-          balanceAfter: 0,
-          createdAt: DateTime.now(),
-          description: 'Premium abonelik - $durationDays gün',
-          productId: productId,
-          purchaseId: purchaseId,
-        ).toMap(),
-      );
+      final transactionRef = _database.ref('credit_transactions').push();
+      await transactionRef.set(CreditTransaction(
+        id: transactionRef.key ?? '',
+        userId: userId,
+        type: TransactionType.purchase,
+        amount: 0,
+        balanceAfter: 0,
+        createdAt: DateTime.now(),
+        description: 'Premium abonelik - $durationDays gün',
+        productId: productId,
+        purchaseId: purchaseId,
+      ).toMap());
       
+      print('✅ Premium abonelik eklendi: $durationDays gün');
       return true;
     } catch (e) {
       print('❌ Premium ekleme hatası: $e');
@@ -200,16 +204,26 @@ class UserService {
   // Kullanıcının işlem geçmişini getir
   Future<List<CreditTransaction>> getTransactionHistory(String userId) async {
     try {
-      final snapshot = await _firestore
-          .collection('credit_transactions')
-          .where('userId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
-          .limit(50)
-          .get();
+      final ref = _database.ref('credit_transactions');
+      final query = ref.orderByChild('userId').equalTo(userId);
+      final snapshot = await query.get();
       
-      return snapshot.docs
-          .map((doc) => CreditTransaction.fromFirestore(doc))
-          .toList();
+      if (!snapshot.exists || snapshot.value == null) {
+        return [];
+      }
+      
+      final data = Map<String, dynamic>.from(snapshot.value as Map);
+      final transactions = <CreditTransaction>[];
+      
+      data.forEach((key, value) {
+        final transactionData = Map<String, dynamic>.from(value as Map);
+        transactions.add(CreditTransaction.fromJson(key, transactionData));
+      });
+      
+      // Tarihe göre sırala (yeniden eskiye)
+      transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      return transactions.take(50).toList();
     } catch (e) {
       print('❌ İşlem geçmişi hatası: $e');
       return [];

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'services/remote_config_service.dart';
 import 'core/routes/app_router.dart';
@@ -11,16 +10,16 @@ import 'providers/bulletin_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Environment variables yükle
-  await dotenv.load(fileName: ".env");
-  
+  // Firebase initialize - Realtime Database kullanımı
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
+  // Remote Config initialize - API anahtarları için
   final remoteConfig = RemoteConfigService();
   await remoteConfig.initialize();
   
+  // Debug modda config değerlerini göster
   if (const bool.fromEnvironment('dart.vm.product') == false) {
     remoteConfig.printAllConfigs();
   }

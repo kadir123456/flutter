@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// Firebase Realtime Database için güncellendi - Firestore kaldırıldı
 
 enum TransactionType {
   purchase, // Satın alma
@@ -32,11 +32,10 @@ class CreditTransaction {
     this.purchaseId,
   });
   
-  factory CreditTransaction.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
+  // Realtime Database'den oluştur
+  factory CreditTransaction.fromJson(String id, Map<String, dynamic> data) {
     return CreditTransaction(
-      id: doc.id,
+      id: id,
       userId: data['userId'] ?? '',
       type: TransactionType.values.firstWhere(
         (e) => e.name == data['type'],
@@ -44,20 +43,23 @@ class CreditTransaction {
       ),
       amount: data['amount'] ?? 0,
       balanceAfter: data['balanceAfter'] ?? 0,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: data['createdAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(data['createdAt'] as int)
+          : DateTime.now(),
       description: data['description'],
       productId: data['productId'],
       purchaseId: data['purchaseId'],
     );
   }
   
+  // Realtime Database'e kaydet
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
       'type': type.name,
       'amount': amount,
       'balanceAfter': balanceAfter,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
       'description': description,
       'productId': productId,
       'purchaseId': purchaseId,
