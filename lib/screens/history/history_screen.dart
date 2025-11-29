@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/bulletin_provider.dart';
 import '../../models/bulletin_model.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final bulletinProvider = context.watch<BulletinProvider>();
     final userId = authProvider.user?.uid;
 
     if (userId == null) {
@@ -46,8 +48,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _buildQuery(userId),
+      body: StreamBuilder<List<BulletinModel>>(
+        stream: _buildStream(userId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _buildError(context, snapshot.error.toString());
@@ -57,7 +59,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final bulletins = snapshot.data?.docs ?? [];
+          var bulletins = snapshot.data ?? [];
+
+          // Filtre uygula
+          if (_filterStatus != 'all') {
+            bulletins = bulletins.where((b) => b.status == _filterStatus).toList();
+          }
 
           if (bulletins.isEmpty) {
             return _buildEmpty(context);
@@ -71,8 +78,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               padding: const EdgeInsets.all(16),
               itemCount: bulletins.length,
               itemBuilder: (context, index) {
-                final doc = bulletins[index];
-                final bulletin = BulletinModel.fromFirestore(doc);
+                final bulletin = bulletins[index];
                 return _buildBulletinCard(context, bulletin);
               },
             ),
@@ -82,18 +88,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Stream<QuerySnapshot> _buildQuery(String userId) {
-    Query query = FirebaseFirestore.instance
-        .collection('bulletins')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(50);
-
-    if (_filterStatus != 'all') {
-      query = query.where('status', isEqualTo: _filterStatus);
-    }
-
-    return query.snapshots();
+  Stream<List<BulletinModel>> _buildStream(String userId) {
+    final ref = FirebaseDatabase.instance.ref('bulletins').orderByChild('userId').equalTo(userId);
+    
+    return ref.onValue.map((event) {
+      final bulletins = <BulletinModel>[];
+      
+      if (event.snapshot.value != null) {
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        
+        data.forEach((key, value) {
+          try {
+            final bulletinData = Map<String, dynamic>.from(value as Map);
+            bulletinData['id'] = key;
+            bulletins.add(BulletinModel.fromJson(bulletinData));
+          } catch (e) {
+            print('❌ Bülten parse hatası: $e');
+          }
+        });
+      }
+      
+      // Tarihe göre sırala (en yeni üstte)
+      bulletins.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      return bulletins;
+    });
   }
 
   Widget _buildBulletinCard(BuildContext context, BulletinModel bulletin) {
@@ -115,7 +134,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: status['color'].withOpacity(0.3),
+          color: status['color'].withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -154,9 +173,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: status['color'].withOpacity(0.1),
+                      color: status['color'].withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: status['color'].withOpacity(0.3)),
+                      border: Border.all(color: status['color'].withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -267,9 +286,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -356,7 +375,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             onPressed: () async {
               Navigator.of(context).pop();
               try {
-                await FirebaseFirestore.instance.collection('bulletins').doc(bulletin.id).delete();
+                final bulletinProvider = context.read<BulletinProvider>();
+                await bulletinProvider.deleteBulletin(bulletin.id);
+                
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Analiz silindi'), backgroundColor: Colors.green),

@@ -44,7 +44,11 @@ final router = GoRouter(
       path: '/analysis/:bulletinId',
       builder: (context, state) {
         final bulletinId = state.pathParameters['bulletinId']!;
-        return AnalysisScreen(bulletinId: bulletinId);
+        final imageBase64 = state.extra as String?;
+        return AnalysisScreen(
+          bulletinId: bulletinId,
+          imageBase64: imageBase64,
+        );
       },
     ),
     GoRoute(

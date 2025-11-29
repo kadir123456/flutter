@@ -1,275 +1,145 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
-import 'remote_config_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import './remote_config_service.dart';
 
 class FootballApiService {
-  final Dio _dio = Dio();
+  static final FootballApiService _instance = FootballApiService._internal();
+  factory FootballApiService() => _instance;
+  FootballApiService._internal();
+
+  final String _baseUrl = 'https://v3.football.api-sports.io';
   final RemoteConfigService _remoteConfig = RemoteConfigService();
   
-  static const String _baseUrl = 'https://v3.football.api-sports.io';
-  
-  // API key'i Remote Config'den al
   String get _apiKey => _remoteConfig.footballApiKey;
-  
-  FootballApiService() {
-    // Headers her request'te dinamik olarak ayarlanacak
-  }
-  
-  // Her request için headers'ı ayarla
-  void _setHeaders() {
-    _dio.options.headers = {
-      'x-rapidapi-key': _apiKey,
-      'x-rapidapi-host': 'v3.football.api-sports.io',
-    };
-  }
-  
-  // Takım arama (fuzzy matching ile)
+
+  /// Takım bilgisi getir (isim ile arama)
   Future<Map<String, dynamic>?> searchTeam(String teamName) async {
     try {
-      _setHeaders(); // Headers'ı ayarla
-      final response = await _dio.get(
-        '$_baseUrl/teams',
-        queryParameters: {
-          'search': teamName,
+      final url = Uri.parse('$_baseUrl/teams?search=$teamName');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-rapidapi-key': _apiKey,
         },
       );
-      
-      if (response.data['results'] > 0) {
-        final teams = response.data['response'] as List;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final teams = data['response'] as List?;
         
-        // En iyi eşleşmeyi bul
-        final bestMatch = _findBestTeamMatch(teamName, teams);
-        
-        return bestMatch;
-      }
-      
-      return null;
-    } catch (e) {
-      debugPrint('❌ Takım arama hatası: $e');
-      return null;
-    }
-  }
-  
-  // Maç arama
-  Future<Map<String, dynamic>?> searchMatch({
-    required int homeTeamId,
-    required int awayTeamId,
-    String? date,
-  }) async {
-    try {
-      _setHeaders(); // Headers'ı ayarla
-      // Tarihi belirle (bugünden +/- 7 gün)
-      final searchDate = date ?? DateTime.now().toIso8601String().split('T')[0];
-      
-      final response = await _dio.get(
-        '$_baseUrl/fixtures',
-        queryParameters: {
-          'date': searchDate,
-          'team': homeTeamId,
-        },
-      );
-      
-      if (response.data['results'] > 0) {
-        final fixtures = response.data['response'] as List;
-        
-        // Ev sahibi ve deplasman eşleşmesini bul
-        for (var fixture in fixtures) {
-          final home = fixture['teams']['home']['id'];
-          final away = fixture['teams']['away']['id'];
-          
-          if (home == homeTeamId && away == awayTeamId) {
-            return fixture;
-          }
+        if (teams != null && teams.isNotEmpty) {
+          return teams.first;
         }
+        return null;
+      } else {
+        throw Exception('Football API error: ${response.statusCode}');
       }
-      
-      return null;
     } catch (e) {
-      debugPrint('❌ Maç arama hatası: $e');
+      print('❌ Football API Search Error: $e');
       return null;
     }
   }
-  
-  // Maç istatistiklerini getir
-  Future<Map<String, dynamic>?> getMatchStatistics(int fixtureId) async {
+
+  /// Takım istatistikleri getir
+  Future<Map<String, dynamic>?> getTeamStats(int teamId, int season) async {
     try {
-      _setHeaders(); // Headers'ı ayarla
-      final response = await _dio.get(
-        '$_baseUrl/fixtures/statistics',
-        queryParameters: {
-          'fixture': fixtureId,
+      final url = Uri.parse('$_baseUrl/teams/statistics?team=$teamId&season=$season&league=203'); // Türkiye Süper Lig
+
+      final response = await http.get(
+        url,
+        headers: {
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-rapidapi-key': _apiKey,
         },
       );
-      
-      if (response.data['results'] > 0) {
-        return response.data['response'][0];
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['response'];
+      } else {
+        throw Exception('Football API error: ${response.statusCode}');
       }
-      
-      return null;
     } catch (e) {
-      debugPrint('❌ Maç istatistik hatası: $e');
+      print('❌ Football API Stats Error: $e');
       return null;
     }
   }
-  
-  // Takımın son maçları
-  Future<List<Map<String, dynamic>>> getTeamLastMatches(int teamId, {int limit = 5}) async {
+
+  /// Son 5 maç sonucu
+  Future<List<Map<String, dynamic>>> getLastMatches(int teamId, int limit) async {
     try {
-      _setHeaders(); // Headers'ı ayarla
-      final response = await _dio.get(
-        '$_baseUrl/fixtures',
-        queryParameters: {
-          'team': teamId,
-          'last': limit,
+      final url = Uri.parse('$_baseUrl/fixtures?team=$teamId&last=$limit');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-rapidapi-key': _apiKey,
         },
       );
-      
-      if (response.data['results'] > 0) {
-        return List<Map<String, dynamic>>.from(response.data['response']);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final fixtures = data['response'] as List?;
+        return fixtures?.cast<Map<String, dynamic>>() ?? [];
+      } else {
+        throw Exception('Football API error: ${response.statusCode}');
       }
-      
-      return [];
     } catch (e) {
-      debugPrint('❌ Son maçlar hatası: $e');
+      print('❌ Football API Matches Error: $e');
       return [];
     }
   }
-  
-  // H2H (Head to Head) istatistikleri
+
+  /// İki takım arasındaki H2H (head to head)
   Future<List<Map<String, dynamic>>> getH2H(int team1Id, int team2Id) async {
     try {
-      _setHeaders(); // Headers'ı ayarla
-      final response = await _dio.get(
-        '$_baseUrl/fixtures/headtohead',
-        queryParameters: {
-          'h2h': '$team1Id-$team2Id',
+      final url = Uri.parse('$_baseUrl/fixtures/headtohead?h2h=$team1Id-$team2Id');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-rapidapi-key': _apiKey,
         },
       );
-      
-      if (response.data['results'] > 0) {
-        return List<Map<String, dynamic>>.from(response.data['response']);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final fixtures = data['response'] as List?;
+        return fixtures?.cast<Map<String, dynamic>>() ?? [];
+      } else {
+        throw Exception('Football API error: ${response.statusCode}');
       }
-      
-      return [];
     } catch (e) {
-      debugPrint('❌ H2H hatası: $e');
+      print('❌ Football API H2H Error: $e');
       return [];
     }
   }
-  
-  // Takım sakatlık/ceza durumu
-  Future<List<Map<String, dynamic>>> getTeamInjuries(int teamId) async {
+
+  /// API quota kontrolü
+  Future<Map<String, dynamic>?> getApiStatus() async {
     try {
-      _setHeaders(); // Headers'ı ayarla
-      final response = await _dio.get(
-        '$_baseUrl/injuries',
-        queryParameters: {
-          'team': teamId,
+      final url = Uri.parse('$_baseUrl/status');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-rapidapi-key': _apiKey,
         },
       );
-      
-      if (response.data['results'] > 0) {
-        return List<Map<String, dynamic>>.from(response.data['response']);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['response'];
       }
-      
-      return [];
-    } catch (e) {
-      debugPrint('❌ Sakatlık bilgisi hatası: $e');
-      return [];
-    }
-  }
-  
-  // Puan durumu
-  Future<Map<String, dynamic>?> getStandings(int leagueId, int season) async {
-    try {
-      _setHeaders(); // Headers'ı ayarla
-      final response = await _dio.get(
-        '$_baseUrl/standings',
-        queryParameters: {
-          'league': leagueId,
-          'season': season,
-        },
-      );
-      
-      if (response.data['results'] > 0) {
-        return response.data['response'][0];
-      }
-      
       return null;
     } catch (e) {
-      debugPrint('❌ Puan durumu hatası: $e');
+      print('❌ Football API Status Error: $e');
       return null;
     }
-  }
-  
-  // En iyi takım eşleşmesini bul (Levenshtein distance)
-  Map<String, dynamic>? _findBestTeamMatch(String searchTerm, List teams) {
-    if (teams.isEmpty) return null;
-    
-    // Basit eşleşme algoritması
-    // Daha gelişmiş fuzzy matching için 'fuzzywuzzy' benzeri bir paket kullanılabilir
-    
-    int bestScore = 0;
-    Map<String, dynamic>? bestMatch;
-    
-    for (var team in teams) {
-      final teamName = team['team']['name'].toString().toLowerCase();
-      final search = searchTerm.toLowerCase();
-      
-      int score = 0;
-      
-      // Tam eşleşme
-      if (teamName == search) {
-        score = 100;
-      }
-      // İçinde geçiyor mu
-      else if (teamName.contains(search) || search.contains(teamName)) {
-        score = 80;
-      }
-      // Başlangıç eşleşmesi
-      else if (teamName.startsWith(search) || search.startsWith(teamName)) {
-        score = 60;
-      }
-      
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = team;
-      }
-    }
-    
-    return bestMatch;
-  }
-  
-  // Türkçe takım isimlerini normalize et
-  String normalizeTeamName(String name) {
-    final normalizations = {
-      // Türkiye
-      'galatasaray': ['gs', 'g.s', 'g.s.', 'gala', 'galata saray'],
-      'fenerbahçe': ['fb', 'f.b', 'f.b.', 'fener', 'fenerbahce'],
-      'beşiktaş': ['bjk', 'b.j.k', 'besiktas', 'beşiktas', 'besiktas'],
-      'trabzonspor': ['ts', 't.s', 'trabzon', 'trabzon spor'],
-      
-      // İngiltere
-      'manchester united': ['man utd', 'man united', 'manutd', 'mu'],
-      'manchester city': ['man city', 'mancity', 'mc'],
-      'liverpool': ['liverpool fc', 'lfc'],
-      
-      // İspanya
-      'barcelona': ['barca', 'fc barcelona', 'fcb'],
-      'real madrid': ['madrid', 'real', 'rm'],
-      
-      // Almanya
-      'bayern munich': ['bayern', 'fcb', 'fc bayern'],
-    };
-    
-    final lowerName = name.toLowerCase().trim();
-    
-    for (var entry in normalizations.entries) {
-      if (entry.value.contains(lowerName)) {
-        return entry.key;
-      }
-    }
-    
-    return lowerName;
   }
 }

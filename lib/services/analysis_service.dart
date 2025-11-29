@@ -6,7 +6,7 @@ import 'gemini_service.dart';
 import 'football_api_service.dart';
 
 class AnalysisService {
-  final GeminiAnalysisService _gemini = GeminiAnalysisService();
+  final GeminiService _gemini = GeminiService();
   final FootballApiService _footballApi = FootballApiService();
   
   // Bülten analiz pipeline'ı
@@ -20,10 +20,17 @@ class AnalysisService {
       onProgress?.call('Görsel analiz ediliyor...');
       
       // 1. ADIM: Görselden maç bilgilerini çıkar
-      final matchesData = await _gemini.analyzeMatchImage(imageBase64);
+      final geminiResponse = await _gemini.analyzeImage(imageBase64);
+      
+      if (geminiResponse.isEmpty) {
+        throw Exception('Görselden maç bilgisi çıkarılamadı');
+      }
+      
+      // JSON parse et
+      final matchesData = _parseGeminiResponse(geminiResponse);
       
       if (matchesData == null || matchesData['matches'] == null) {
-        throw Exception('Görselden maç bilgisi çıkarılamadı');
+        throw Exception('Görsel analizi başarısız oldu');
       }
       
       final matches = matchesData['matches'] as List;
@@ -74,12 +81,15 @@ class AnalysisService {
           );
           
           // 2c. Gemini ile detaylı analiz
-          final analysis = await _gemini.analyzeMatch(
+          final analysisPrompt = _buildAnalysisPrompt(
             homeTeam: homeTeamData['team']['name'],
             awayTeam: awayTeamData['team']['name'],
             userPrediction: match['userPrediction'] ?? '1',
             matchStats: stats,
           );
+          
+          final analysisResponse = await _gemini.analyzeText(analysisPrompt);
+          final analysis = _parseAnalysisResponse(analysisResponse);
           
           if (analysis != null) {
             predictions.add(_convertAnalysisToPrediction(
@@ -107,14 +117,11 @@ class AnalysisService {
       // 3. ADIM: Genel bülten değerlendirmesi
       onProgress?.call('Genel değerlendirme yapılıyor...');
       
-      final overallSummary = await _gemini.analyzeBulletinOverall(
-        predictions.map((p) => {
-          'homeTeam': p.homeTeam,
-          'awayTeam': p.awayTeam,
-          'userPrediction': p.userPrediction,
-          'confidence': p.confidence,
-        }).toList(),
-      );
+      final overallPrompt = _buildOverallPrompt(predictions);
+      final overallResponse = await _gemini.analyzeText(overallPrompt);
+      final overallSummary = overallResponse.isNotEmpty 
+          ? overallResponse 
+          : 'Genel değerlendirme alınamadı.';
       
       // 4. ADIM: Sonuçları kaydet
       final overallSuccessRate = _calculateOverallSuccessRate(predictions);
@@ -123,7 +130,7 @@ class AnalysisService {
         overall: OverallAssessment(
           successProbability: overallSuccessRate,
           riskiestPicks: _findRiskiestPicks(predictions),
-          strategy: overallSummary ?? 'Genel değerlendirme alınamadı.',
+          strategy: overallSummary,
         ),
       );
       
@@ -142,6 +149,95 @@ class AnalysisService {
     }
   }
   
+  // Gemini response'unu parse et
+  Map<String, dynamic>? _parseGeminiResponse(String response) {
+    try {
+      // JSON bloğunu bul
+      final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(response);
+      if (jsonMatch != null) {
+        return jsonDecode(jsonMatch.group(0)!);
+      }
+      
+      // Alternatif: code block içinde JSON
+      final codeBlockMatch = RegExp(r'```json\s*([\s\S]*?)\s*```').firstMatch(response);
+      if (codeBlockMatch != null) {
+        return jsonDecode(codeBlockMatch.group(1)!);
+      }
+      
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ JSON parse hatası: $e');
+      }
+      return null;
+    }
+  }
+  
+  // Analiz response'unu parse et
+  Map<String, dynamic>? _parseAnalysisResponse(String response) {
+    try {
+      final parsed = _parseGeminiResponse(response);
+      if (parsed != null) return parsed;
+      
+      // Basit text yanıt döndüyse, varsayılan yapı oluştur
+      return {
+        'prediction': {'type': '1', 'confidence': 50},
+        'reasoning': response,
+        'alternatives': [],
+        'risk': {'level': 'medium', 'factors': []},
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+  
+  // Analiz prompt'u oluştur
+  String _buildAnalysisPrompt({
+    required String homeTeam,
+    required String awayTeam,
+    required String userPrediction,
+    required Map<String, dynamic> matchStats,
+  }) {
+    return '''
+Futbol maçı analizi yap ve JSON formatında yanıt ver.
+
+Maç: $homeTeam vs $awayTeam
+Kullanıcı Tahmini: $userPrediction (1=Ev Sahibi, X=Beraberlik, 2=Deplasman)
+
+İstatistikler:
+${jsonEncode(matchStats)}
+
+Şu formatta JSON yanıt ver:
+{
+  "prediction": {
+    "type": "1", // 1, X veya 2
+    "confidence": 75 // 0-100 arası
+  },
+  "reasoning": "Detaylı açıklama...",
+  "alternatives": ["X", "2"],
+  "risk": {
+    "level": "low", // low, medium, high
+    "factors": ["Risk faktörleri listesi"]
+  }
+}
+''';
+  }
+  
+  // Genel değerlendirme prompt'u
+  String _buildOverallPrompt(List<MatchPrediction> predictions) {
+    final summary = predictions.map((p) => 
+      '${p.homeTeam} vs ${p.awayTeam}: Tahmin ${p.userPrediction}, Güven %${p.confidence.toInt()}'
+    ).join('\n');
+    
+    return '''
+Şu bülten için genel strateji önerisi ver:
+
+$summary
+
+Kısa ve öz bir değerlendirme yap (max 3 cümle).
+''';
+  }
+  
   // Maç istatistiklerini topla
   Future<Map<String, dynamic>> _collectMatchStats({
     required int homeTeamId,
@@ -153,8 +249,8 @@ class AnalysisService {
     
     try {
       // Son 5 maç
-      final homeLast = await _footballApi.getTeamLastMatches(homeTeamId, limit: 5);
-      final awayLast = await _footballApi.getTeamLastMatches(awayTeamId, limit: 5);
+      final homeLast = await _footballApi.getLastMatches(homeTeamId, 5);
+      final awayLast = await _footballApi.getLastMatches(awayTeamId, 5);
       
       stats['last5Matches'] = {
         'home': _formatLastMatches(homeLast, homeTeamId),
@@ -170,16 +266,6 @@ class AnalysisService {
       // H2H
       final h2h = await _footballApi.getH2H(homeTeamId, awayTeamId);
       stats['h2h'] = _formatH2H(h2h, homeTeamId);
-      
-      // Sakatlıklar
-      final homeInjuries = await _footballApi.getTeamInjuries(homeTeamId);
-      final awayInjuries = await _footballApi.getTeamInjuries(awayTeamId);
-      
-      stats['injuries'] = {
-        'home': homeInjuries.length,
-        'away': awayInjuries.length,
-        'details': '$homeTeamName: ${homeInjuries.length} sakatlık, $awayTeamName: ${awayInjuries.length} sakatlık',
-      };
     } catch (e) {
       if (kDebugMode) {
         print('⚠️ İstatistik toplama hatası: $e');
@@ -195,8 +281,6 @@ class AnalysisService {
     
     final results = matches.take(5).map((match) {
       final homeTeam = match['teams']['home'];
-      // ignore: unused_local_variable
-      final awayTeam = match['teams']['away'];
       final homeGoals = match['goals']['home'] ?? 0;
       final awayGoals = match['goals']['away'] ?? 0;
       
@@ -220,8 +304,6 @@ class AnalysisService {
     
     for (var match in matches.take(5)) {
       final homeTeam = match['teams']['home'];
-      // ignore: unused_local_variable
-      final awayTeam = match['teams']['away'];
       final homeGoals = match['goals']['home'] ?? 0;
       final awayGoals = match['goals']['away'] ?? 0;
       
@@ -331,6 +413,22 @@ class AnalysisService {
   
   // Takım ismini normalize et
   String _normalizeTeamName(String name) {
-    return _footballApi.normalizeTeamName(name);
+    // Türkçe karakterleri temizle
+    final normalized = name
+        .replaceAll('ı', 'i')
+        .replaceAll('İ', 'I')
+        .replaceAll('ş', 's')
+        .replaceAll('Ş', 'S')
+        .replaceAll('ğ', 'g')
+        .replaceAll('Ğ', 'G')
+        .replaceAll('ü', 'u')
+        .replaceAll('Ü', 'U')
+        .replaceAll('ö', 'o')
+        .replaceAll('Ö', 'O')
+        .replaceAll('ç', 'c')
+        .replaceAll('Ç', 'C')
+        .trim();
+    
+    return normalized;
   }
 }

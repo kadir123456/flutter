@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/credit_transaction_model.dart';
@@ -92,13 +92,8 @@ class CreditHistoryScreen extends StatelessWidget {
 
           // İşlem Geçmişi
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('credit_transactions')
-                  .where('userId', isEqualTo: userId)
-                  .orderBy('createdAt', descending: true)
-                  .limit(100)
-                  .snapshots(),
+            child: StreamBuilder<List<CreditTransaction>>(
+              stream: _buildTransactionsStream(userId),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return _buildError(context, snapshot.error.toString());
@@ -108,7 +103,7 @@ class CreditHistoryScreen extends StatelessWidget {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final transactions = snapshot.data?.docs ?? [];
+                final transactions = snapshot.data ?? [];
 
                 if (transactions.isEmpty) {
                   return _buildEmpty(context);
@@ -118,8 +113,7 @@ class CreditHistoryScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: transactions.length,
                   itemBuilder: (context, index) {
-                    final doc = transactions[index];
-                    final transaction = CreditTransaction.fromFirestore(doc);
+                    final transaction = transactions[index];
                     return _buildTransactionCard(context, transaction);
                   },
                 );
@@ -129,6 +123,37 @@ class CreditHistoryScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Stream<List<CreditTransaction>> _buildTransactionsStream(String userId) {
+    final ref = FirebaseDatabase.instance
+        .ref('credit_transactions')
+        .orderByChild('userId')
+        .equalTo(userId);
+    
+    return ref.onValue.map((event) {
+      final transactions = <CreditTransaction>[];
+      
+      if (event.snapshot.value != null) {
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        
+        data.forEach((key, value) {
+          try {
+            final transactionData = Map<String, dynamic>.from(value as Map);
+            transactionData['id'] = key;
+            transactions.add(CreditTransaction.fromJson(transactionData));
+          } catch (e) {
+            print('❌ Transaction parse hatası: $e');
+          }
+        });
+      }
+      
+      // Tarihe göre sırala (en yeni üstte)
+      transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      // İlk 100 işlemi döndür
+      return transactions.take(100).toList();
+    });
   }
 
   Widget _buildTransactionCard(BuildContext context, CreditTransaction transaction) {
