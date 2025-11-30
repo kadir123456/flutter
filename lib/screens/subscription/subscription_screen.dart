@@ -334,26 +334,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       {
         'duration': 'Aylık',
         'days': 30,
-        'price': 79.99,
+        'price': 899.00,
         'color': Colors.blue,
         'icon': Icons.calendar_today,
       },
       {
         'duration': '3 Aylık',
         'days': 90,
-        'price': 199.99,
+        'price': 1999.00,
         'color': Colors.purple,
         'icon': Icons.calendar_month,
         'popular': true,
-        'discount': '%16 İndirim',
+        'discount': '%26 İndirim',
       },
       {
         'duration': 'Yıllık',
         'days': 365,
-        'price': 599.99,
+        'price': 6999.00,
         'color': Colors.amber,
         'icon': Icons.event_available,
-        'discount': '%37 İndirim',
+        'discount': '%35 İndirim',
       },
     ];
 

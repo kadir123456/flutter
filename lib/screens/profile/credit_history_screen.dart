@@ -140,8 +140,7 @@ class CreditHistoryScreen extends StatelessWidget {
         data.forEach((key, value) {
           try {
             final transactionData = Map<String, dynamic>.from(value as Map);
-            transactionData['id'] = key;
-            transactions.add(CreditTransaction.fromJson(transactionData));
+            transactions.add(CreditTransaction.fromJson(key, transactionData));
           } catch (e) {
             print('❌ Transaction parse hatası: $e');
           }

@@ -100,8 +100,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         data.forEach((key, value) {
           try {
             final bulletinData = Map<String, dynamic>.from(value as Map);
-            bulletinData['id'] = key;
-            bulletins.add(BulletinModel.fromJson(bulletinData));
+            bulletins.add(BulletinModel.fromJson(key, bulletinData));
           } catch (e) {
             print('❌ Bülten parse hatası: $e');
           }

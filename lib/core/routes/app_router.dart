@@ -4,6 +4,8 @@ import '../../screens/auth/register_screen.dart';
 import '../../screens/home/home_screen.dart';
 import '../../screens/profile/profile_screen.dart';
 import '../../screens/profile/credit_history_screen.dart';
+import '../../screens/profile/account_settings_screen.dart';
+import '../../screens/profile/notification_settings_screen.dart';
 import '../../screens/analysis/analysis_screen.dart';
 import '../../screens/history/history_screen.dart';
 import '../../screens/upload/upload_screen.dart';
@@ -37,6 +39,14 @@ final router = GoRouter(
       builder: (context, state) => const CreditHistoryScreen(),
     ),
     GoRoute(
+      path: '/account-settings',
+      builder: (context, state) => const AccountSettingsScreen(),
+    ),
+    GoRoute(
+      path: '/notification-settings',
+      builder: (context, state) => const NotificationSettingsScreen(),
+    ),
+    GoRoute(
       path: '/upload',
       builder: (context, state) => const UploadScreen(),
     ),
@@ -44,10 +54,10 @@ final router = GoRouter(
       path: '/analysis/:bulletinId',
       builder: (context, state) {
         final bulletinId = state.pathParameters['bulletinId']!;
-        final imageBase64 = state.extra as String?;
+        final base64Image = state.extra as String; // Base64 image from upload
         return AnalysisScreen(
           bulletinId: bulletinId,
-          imageBase64: imageBase64,
+          base64Image: base64Image,
         );
       },
     ),
@@ -59,6 +69,7 @@ final router = GoRouter(
       path: '/subscription',
       builder: (context, state) => const SubscriptionScreen(),
     ),
+    
     // Static Pages
     GoRoute(
       path: '/terms',

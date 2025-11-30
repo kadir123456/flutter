@@ -50,7 +50,6 @@ class BulletinModel {
   BulletinModel copyWith({
     String? id,
     String? userId,
-    String? imageUrl,
     String? status,
     DateTime? createdAt,
     DateTime? analyzedAt,
@@ -59,7 +58,6 @@ class BulletinModel {
     return BulletinModel(
       id: id ?? this.id,
       userId: userId ?? this.userId,
-      imageUrl: imageUrl ?? this.imageUrl,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       analyzedAt: analyzedAt ?? this.analyzedAt,
