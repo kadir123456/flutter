@@ -12,8 +12,53 @@ class FootballApiService {
   
   String get _apiKey => _remoteConfig.footballApiKey;
 
-  /// Takım bilgisi getir (isim ile arama)
+  /// Takım bilgisi getir (isim ile arama - akıllı arama)
   Future<Map<String, dynamic>?> searchTeam(String teamName) async {
+    try {
+      // İlk deneme: Orijinal isim
+      var result = await _searchTeamByName(teamName);
+      if (result != null) return result;
+
+      // İkinci deneme: "B" yerine "II" dene
+      if (teamName.contains(' B')) {
+        final altName = teamName.replaceAll(' B', ' II');
+        result = await _searchTeamByName(altName);
+        if (result != null) {
+          print('✅ Alternatif isimle bulundu: $teamName -> $altName');
+          return result;
+        }
+      }
+
+      // Üçüncü deneme: "II" yerine "B" dene
+      if (teamName.contains(' II')) {
+        final altName = teamName.replaceAll(' II', ' B');
+        result = await _searchTeamByName(altName);
+        if (result != null) {
+          print('✅ Alternatif isimle bulundu: $teamName -> $altName');
+          return result;
+        }
+      }
+
+      // Dördüncü deneme: Sadece ana takım ismi (UD, SD, CE gibi önekleri kaldır)
+      final cleanName = _cleanTeamName(teamName);
+      if (cleanName != teamName) {
+        result = await _searchTeamByName(cleanName);
+        if (result != null) {
+          print('✅ Temiz isimle bulundu: $teamName -> $cleanName');
+          return result;
+        }
+      }
+
+      print('⚠️ Takım bulunamadı (tüm varyasyonlar denendi): $teamName');
+      return null;
+    } catch (e) {
+      print('❌ Football API Search Error: $e');
+      return null;
+    }
+  }
+
+  /// Gerçek API çağrısı
+  Future<Map<String, dynamic>?> _searchTeamByName(String teamName) async {
     try {
       final url = Uri.parse('$_baseUrl/teams?search=$teamName');
 
@@ -33,13 +78,23 @@ class FootballApiService {
           return teams.first;
         }
         return null;
-      } else {
-        throw Exception('Football API error: ${response.statusCode}');
       }
+      return null;
     } catch (e) {
-      print('❌ Football API Search Error: $e');
       return null;
     }
+  }
+
+  /// Takım ismini temizle (UD, SD, CE gibi önekleri kaldır)
+  String _cleanTeamName(String teamName) {
+    // Önekleri kaldır
+    final prefixes = ['UD ', 'SD ', 'CE ', 'CD ', 'CA ', 'UE ', 'CF '];
+    for (final prefix in prefixes) {
+      if (teamName.startsWith(prefix)) {
+        return teamName.substring(prefix.length);
+      }
+    }
+    return teamName;
   }
 
   /// Takım istatistikleri getir

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -11,7 +10,6 @@ import '../services/user_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
   final UserService _userService = UserService();
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   
@@ -187,105 +185,9 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  Future<bool> signInWithGoogle() async {
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
-      
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
-      if (googleUser == null) {
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      }
-      
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      
-      final userCredential = await _auth.signInWithCredential(credential);
-      _user = userCredential.user;
-      
-      if (_user != null) {
-        final existingUser = await _userService.getUser(_user!.uid);
-        
-        if (existingUser == null) {
-          // YENİ KULLANICI - IP BAN KONTROLÜ
-          final ipAddress = await _getIpAddress();
-          final deviceId = await _getDeviceId();
-          
-          final isBanned = await _userService.checkIpBan(ipAddress, deviceId);
-          if (isBanned) {
-            await _auth.signOut();
-            await _googleSignIn.signOut();
-            _user = null;
-            _isLoading = false;
-            _errorMessage = 'Bu cihazdan daha önce hesap oluşturulmuş.\n\nDestek ekibimizle iletişime geçin:\nbilwininc@gmail.com';
-            notifyListeners();
-            return false;
-          }
-          
-          final newUser = UserModel(
-            uid: _user!.uid,
-            email: _user!.email ?? '',
-            displayName: _user!.displayName,
-            photoUrl: _user!.photoURL,
-            credits: 3,
-            createdAt: DateTime.now(),
-            lastLoginAt: DateTime.now(),
-            ipAddress: ipAddress,
-            deviceId: deviceId,
-            isBanned: false,
-          );
-          
-          await _userService.createOrUpdateUser(newUser);
-        } else {
-          // MEVCUT KULLANICI - Ban kontrolü
-          if (existingUser.isBanned) {
-            await _auth.signOut();
-            await _googleSignIn.signOut();
-            _user = null;
-            _isLoading = false;
-            _errorMessage = 'Hesabınız askıya alınmıştır.\n\nDestek ekibimizle iletişime geçin:\nbilwininc@gmail.com';
-            notifyListeners();
-            return false;
-          }
-          
-          // Sadece lastLoginAt güncelle (KREDİLER KORUNUR)
-          await _userService.createOrUpdateUser(UserModel(
-            uid: _user!.uid,
-            email: _user!.email ?? '',
-            displayName: _user!.displayName,
-            photoUrl: _user!.photoURL,
-            createdAt: existingUser.createdAt,
-            lastLoginAt: DateTime.now(),
-          ));
-        }
-        
-        await _loadUserModel(_user!.uid);
-        listenToUserModel(_user!.uid);
-      }
-      
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Google ile giriş yapılamadı: $e';
-      notifyListeners();
-      return false;
-    }
-  }
-  
   Future<void> signOut() async {
     try {
       await _auth.signOut();
-      await _googleSignIn.signOut();
       _user = null;
       _userModel = null;
       notifyListeners();

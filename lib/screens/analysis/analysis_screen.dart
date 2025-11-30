@@ -57,6 +57,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         throw Exception('Görselde maç bulunamadı');
       }
 
+      // Debug: Gemini'nin çıkardığı isimleri göster
+      print('📋 Gemini\'den gelen maçlar:');
+      for (var match in matches) {
+        print('  - ${match['homeTeam']} vs ${match['awayTeam']}');
+      }
+
       setState(() {
         _matches = matches;
         _statusMessage = '${matches.length} maç bulundu. Analiz ediliyor...';
@@ -98,22 +104,23 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         final match = matches[i];
         final homeTeam = match['homeTeam'] ?? '';
         final awayTeam = match['awayTeam'] ?? '';
-        final userPrediction = match['userPrediction'] ?? '?';
 
         setState(() {
           _statusMessage = 'Maç ${i + 1}/${matches.length}: $homeTeam vs $awayTeam';
         });
 
-        // Football API'den takım bilgisi çek (Rate limit için 500ms bekle)
-        if (i > 0) await Future.delayed(const Duration(milliseconds: 500));
+        // Football API'den takım bilgisi çek (Rate limit için bekleme)
+        if (i > 0) await Future.delayed(const Duration(milliseconds: 800));
         
         final homeStats = await _getTeamStatsWithFallback(homeTeam);
+        
+        // İkinci takım için de biraz bekle
+        await Future.delayed(const Duration(milliseconds: 600));
         final awayStats = await _getTeamStatsWithFallback(awayTeam);
 
         matchesWithStats.add({
           'homeTeam': homeTeam,
           'awayTeam': awayTeam,
-          'userPrediction': userPrediction,
           'homeStats': homeStats,
           'awayStats': awayStats,
         });
@@ -150,7 +157,18 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   /// Football API'den istatistik çek (hata durumunda fallback)
   Future<Map<String, dynamic>> _getTeamStatsWithFallback(String teamName) async {
     try {
-      final teamData = await _footballApi.searchTeam(teamName);
+      var teamData = await _footballApi.searchTeam(teamName);
+      
+      // İlk denemede bulunamadıysa, Gemini ile normalize et
+      if (teamData == null) {
+        print('🔄 Gemini ile normalize ediliyor: $teamName');
+        final normalizedName = await _normalizeTeamNameWithGemini(teamName);
+        
+        if (normalizedName != null && normalizedName != teamName) {
+          print('  ➡️ Normalize edildi: $teamName -> $normalizedName');
+          teamData = await _footballApi.searchTeam(normalizedName);
+        }
+      }
       
       if (teamData != null) {
         final teamId = teamData['team']?['id'];
@@ -183,6 +201,31 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
+  /// Gemini ile takım ismini normalize et
+  Future<String?> _normalizeTeamNameWithGemini(String teamName) async {
+    try {
+      final prompt = '''Takım ismi: "$teamName"
+
+Bu takımın Football-API.com'da bulunabilecek resmi İngilizce ismini ver.
+
+Örnekler:
+- "Espanyol II" → "Espanyol B"
+- "Valencia M." → "Valencia Mestalla"
+- "UD Poblense" → "Poblense"
+- "CE Andratx" → "Andratx"
+
+Sadece takım ismini yaz, başka bir şey yazma.''';
+
+      final response = await _geminiService.analyzeText(prompt);
+      final normalized = response.trim().replaceAll('"', '');
+      
+      return normalized.isNotEmpty ? normalized : null;
+    } catch (e) {
+      print('❌ Gemini normalize hatası: $e');
+      return null;
+    }
+  }
+
   /// Tüm maçlar için tek prompt oluştur
   String _createBatchAnalysisPrompt(List<Map<String, dynamic>> matches) {
     final matchesInfo = matches.asMap().entries.map((entry) {
@@ -193,7 +236,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 MAÇ $index:
 - Ev Sahibi: ${match['homeTeam']} ${_formatStats(match['homeStats'])}
 - Deplasman: ${match['awayTeam']} ${_formatStats(match['awayStats'])}
-- Kullanıcı Tahmini: ${match['userPrediction']}
 ''';
     }).join('\n');
 
@@ -209,20 +251,17 @@ Her maç için şu JSON formatında yanıt ver:
       "matchIndex": 1,
       "homeTeam": "Takım Adı",
       "awayTeam": "Takım Adı",
-      "userPrediction": "1",
       "aiPrediction": "X",
       "confidence": 75,
-      "reasoning": "Kısa analiz açıklaması (max 150 karakter)",
-      "isCorrect": false
+      "reasoning": "Net ve kısa analiz nedeni (max 100 karakter)"
     }
   ]
 }
 
 KURALLAR:
-- aiPrediction: "1" (Ev Sahibi), "X" (Beraberlik), veya "2" (Deplasman)
-- confidence: 0-100 arası
-- reasoning: Maksimum 150 karakter
-- isCorrect: userPrediction == aiPrediction ise true
+- aiPrediction: "1" (Ev Sahibi Kazanır), "X" (Beraberlik), veya "2" (Deplasman Kazanır)
+- confidence: 0-100 arası güven seviyesi
+- reasoning: Kısa ve net neden açıklaması (maksimum 100 karakter)
 - Sadece JSON döndür, başka açıklama ekleme
 ''';
   }
@@ -265,11 +304,9 @@ KURALLAR:
           'matchIndex': index + 1,
           'homeTeam': match['homeTeam'],
           'awayTeam': match['awayTeam'],
-          'userPrediction': match['userPrediction'],
           'aiPrediction': '?',
           'confidence': 0,
-          'reasoning': 'Analiz hatası - yanıt parse edilemedi',
-          'isCorrect': false,
+          'reasoning': 'Analiz yapılamadı - Teknik hata',
         };
       }).toList();
     }
@@ -314,19 +351,14 @@ KURALLAR:
   Future<void> _saveBatchResults(List<Map<String, dynamic>> results) async {
     try {
       final database = FirebaseDatabase.instance;
-      final correctCount = results.where((r) => r['isCorrect'] == true).length;
       
       await database.ref('bulletins/${widget.bulletinId}').update({
         'matches': results,
         'analyzedAt': ServerValue.timestamp,
         'matchCount': results.length,
-        'correctCount': correctCount,
-        'successRate': results.isNotEmpty 
-            ? ((correctCount / results.length) * 100).toInt() 
-            : 0,
       });
 
-      print('✅ ${results.length} maç sonucu Realtime Database\'e kaydedildi');
+      print('✅ ${results.length} maç analizi Realtime Database\'e kaydedildi');
     } catch (e) {
       print('❌ Database kayıt hatası: $e');
     }
@@ -408,35 +440,34 @@ KURALLAR:
       );
     }
 
-    final correctCount = _analysisResults.where((r) => r['isCorrect'] == true).length;
     final totalCount = _analysisResults.length;
-    final successRate = totalCount > 0 ? (correctCount / totalCount * 100).toInt() : 0;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         // Özet Kartı
         Card(
-          color: Colors.green[50],
+          color: Colors.blue[50],
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
+                Icon(
+                  Icons.sports_soccer,
+                  size: 48,
+                  color: Colors.blue[700],
+                ),
+                const SizedBox(height: 12),
                 Text(
-                  '$correctCount / $totalCount',
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        color: Colors.green[700],
+                  '$totalCount Maç Analiz Edildi',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.blue[900],
                         fontWeight: FontWeight.bold,
                       ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Doğru Tahmin',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Başarı Oranı: %$successRate',
+                  'AI tarafından profesyonel analiz yapıldı',
                   style: TextStyle(color: Colors.grey[700]),
                 ),
               ],
@@ -452,109 +483,119 @@ KURALLAR:
   }
 
   Widget _buildMatchCard(Map<String, dynamic> result) {
-    final isCorrect = result['isCorrect'] == true;
     final confidence = result['confidence'] ?? 0;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Maç Bilgisi
+            Text(
+              '${result['homeTeam']} vs ${result['awayTeam']}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 17,
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // AI Tahmini
             Row(
               children: [
+                Icon(
+                  Icons.psychology,
+                  color: Colors.blue[600],
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'AI Tahmini:',
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${result['homeTeam']} vs ${result['awayTeam']}',
-                    style: const TextStyle(
+                    _formatPrediction(result['aiPrediction']),
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 15,
+                      color: Colors.blue[900],
                     ),
                   ),
                 ),
+                // Güven Seviyesi
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: isCorrect ? Colors.green[100] : Colors.red[100],
+                    color: _getConfidenceColor(confidence).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    isCorrect ? '✓ Doğru' : '✗ Yanlış',
-                    style: TextStyle(
-                      color: isCorrect ? Colors.green[700] : Colors.red[700],
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                    border: Border.all(
+                      color: _getConfidenceColor(confidence),
+                      width: 1.5,
                     ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.bar_chart,
+                        size: 14,
+                        color: _getConfidenceColor(confidence),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '%$confidence',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: _getConfidenceColor(confidence),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Senin Tahmin:',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                      ),
-                      Text(
-                        _formatPrediction(result['userPrediction']),
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
+            
+            // Analiz Nedeni
+            if (result['reasoning'] != null && result['reasoning'].toString().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'AI Tahmini:',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                      ),
-                      Text(
-                        _formatPrediction(result['aiPrediction']),
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Güven:',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    Icon(
+                      Icons.lightbulb_outline,
+                      size: 16,
+                      color: Colors.orange[700],
                     ),
-                    Text(
-                      '%$confidence',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: _getConfidenceColor(confidence),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        result['reasoning'],
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[800],
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ],
-                ),
-              ],
-            ),
-            if (result['reasoning'] != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  result['reasoning'],
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[800],
-                  ),
                 ),
               ),
             ],

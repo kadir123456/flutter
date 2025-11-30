@@ -22,19 +22,28 @@ class GeminiService {
           {
             'parts': [
               {
-                'text': '''Bu spor bülteni görselini analiz et ve her maç için aşağıdaki JSON formatında yanıt ver:
+                'text': '''Bu görseldeki futbol maçlarını analiz et ve her maç için takım isimlerini çıkar.
 
+ÖNEMLİ: Takım isimlerini resmi İngilizce isimlerine çevir. Football-API.com ile uyumlu olmalı.
+
+Örnekler:
+- "Espanyol II" → "Espanyol B"
+- "Valencia M." → "Valencia Mestalla"  
+- "Almería B" → "Almeria B"
+- "Girona B" → "Girona B"
+- Türkçe karakterleri (ı,ğ,ü,ş,ö,ç) İngilizce'ye çevir (i,g,u,s,o,c)
+
+JSON formatı:
 {
   "matches": [
     {
-      "homeTeam": "Ev Sahibi Takım Adı",
-      "awayTeam": "Deplasman Takım Adı",
-      "userPrediction": "1" // 1=Ev Sahibi, X=Beraberlik, 2=Deplasman
+      "homeTeam": "Resmi İngilizce Takım Adı",
+      "awayTeam": "Resmi İngilizce Takım Adı"
     }
   ]
 }
 
-Lütfen sadece JSON döndür, başka açıklama ekleme.'''
+Sadece JSON döndür, başka açıklama yazma.'''
               },
               {
                 'inline_data': {

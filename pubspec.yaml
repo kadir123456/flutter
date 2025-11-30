@@ -17,9 +17,7 @@ dependencies:
   firebase_remote_config: ^5.1.4
   # ❌ cloud_firestore KALDIRILDI - Realtime Database kullanıyoruz
   # ❌ firebase_storage KALDIRILDI - Görsel kaydedilmiyor
-  
-  # Google Sign-In
-  google_sign_in: ^6.2.2
+  # ❌ google_sign_in KALDIRILDI - Sadece email/password kullanılıyor
   
   # State Management
   provider: ^6.1.2
