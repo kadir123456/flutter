@@ -136,7 +136,8 @@ async function updateMatchPoolLogic() {
   await cleanOldMatches(db);
 
   functions.logger.info(
-      `🎉 Toplam ${totalMatches} maç güncellendi (${uniqueLeagues.size} farklı lig)`,
+      `🎉 Toplam ${totalMatches} maç güncellendi ` +
+      `(${uniqueLeagues.size} farklı lig)`,
   );
 
   return {
@@ -166,32 +167,16 @@ async function fetchAllFixturesForDate(apiKey, date) {
     const matches = [];
 
     for (const fixture of fixtures) {
-      // Rate limit koruması
-      await sleep(200);
-
       const homeTeamId = fixture.teams.home.id;
       const awayTeamId = fixture.teams.away.id;
       const leagueId = fixture.league.id;
 
-      // Stats çek (opsiyonel - hata olsa bile devam et)
-      let homeStats = null;
-      let awayStats = null;
-      let h2h = [];
-
-      try {
-        homeStats = await fetchTeamStats(apiKey, homeTeamId, leagueId);
-        await sleep(200);
-
-        awayStats = await fetchTeamStats(apiKey, awayTeamId, leagueId);
-        await sleep(200);
-
-        h2h = await fetchH2H(apiKey, homeTeamId, awayTeamId);
-      } catch (statsError) {
-        functions.logger.warn(
-            `⚠️ Stats alınamadı (Fixture ${fixture.fixture.id}):`,
-            statsError.message,
-        );
-      }
+      // Stats ve H2H çekme geçici olarak devre dışı
+      // (Timeout sorununu önlemek için)
+      // İstersen sonra aktif ederiz
+      const homeStats = null;
+      const awayStats = null;
+      const h2h = [];
 
       const match = {
         fixtureId: fixture.fixture.id,
@@ -221,13 +206,11 @@ async function fetchAllFixturesForDate(apiKey, date) {
   }
 }
 
-/**
- * Takım istatistikleri çek
- * @param {string} apiKey - Football API key
- * @param {number} teamId - Team ID
- * @param {number} leagueId - League ID
- * @return {Promise<Object>} Team stats
- */
+// Stats ve H2H fonksiyonları geçici olarak devre dışı
+// (Timeout sorununu önlemek için yoruma alındı)
+// İstersen sonra aktif ederiz
+
+/*
 async function fetchTeamStats(apiKey, teamId, leagueId) {
   const season = new Date().getFullYear();
   const url = `https://v3.football.api-sports.io/teams/statistics` +
@@ -245,13 +228,6 @@ async function fetchTeamStats(apiKey, teamId, leagueId) {
   }
 }
 
-/**
- * H2H (Head to Head) çek
- * @param {string} apiKey - Football API key
- * @param {number} team1Id - Team 1 ID
- * @param {number} team2Id - Team 2 ID
- * @return {Promise<Array>} H2H matches
- */
 async function fetchH2H(apiKey, team1Id, team2Id) {
   const url = `https://v3.football.api-sports.io/fixtures/headtohead?h2h=${team1Id}-${team2Id}`;
 
@@ -263,6 +239,7 @@ async function fetchH2H(apiKey, team1Id, team2Id) {
     return [];
   }
 }
+*/
 
 /**
  * HTTPS isteği yap
@@ -274,8 +251,7 @@ function makeHttpsRequest(url, apiKey) {
   return new Promise((resolve, reject) => {
     const options = {
       headers: {
-        "x-rapidapi-host": "v3.football.api-sports.io",
-        "x-rapidapi-key": apiKey,
+        "x-apisports-key": apiKey,
       },
     };
 
