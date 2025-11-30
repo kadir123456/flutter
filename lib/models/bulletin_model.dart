@@ -31,9 +31,29 @@ class BulletinModel {
           ? DateTime.fromMillisecondsSinceEpoch(data['analyzedAt'] as int)
           : null,
       analysis: data['analysis'] != null 
-          ? Map<String, dynamic>.from(data['analysis'])
+          ? _deepConvertToMap(data['analysis'])
           : null,
     );
+  }
+  
+  // Firebase LinkedMap'i Map<String, dynamic>'e deep convert
+  static Map<String, dynamic> _deepConvertToMap(dynamic value) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(
+        value.map((key, val) => MapEntry(key.toString(), _deepConvertValue(val)))
+      );
+    }
+    return {};
+  }
+
+  // Değerleri de dönüştür (recursive)
+  static dynamic _deepConvertValue(dynamic value) {
+    if (value is Map) {
+      return _deepConvertToMap(value);
+    } else if (value is List) {
+      return value.map((item) => _deepConvertValue(item)).toList();
+    }
+    return value;
   }
   
   // Realtime Database'e kaydet
@@ -78,9 +98,19 @@ class BulletinAnalysis {
   factory BulletinAnalysis.fromJson(Map<String, dynamic> json) {
     return BulletinAnalysis(
       predictions: (json['predictions'] as List?)
-          ?.map((p) => MatchPrediction.fromJson(p))
+          ?.map((p) {
+            // LinkedMap'i Map'e dönüştür
+            if (p is Map) {
+              return MatchPrediction.fromJson(Map<String, dynamic>.from(p));
+            }
+            return MatchPrediction.fromJson(p);
+          })
           .toList() ?? [],
-      overall: OverallAssessment.fromJson(json['overall'] ?? {}),
+      overall: OverallAssessment.fromJson(
+        json['overall'] != null && json['overall'] is Map
+            ? Map<String, dynamic>.from(json['overall'] as Map)
+            : {}
+      ),
     );
   }
   
@@ -129,7 +159,11 @@ class MatchPrediction {
       confidence: (json['confidence'] ?? 0).toDouble(),
       reasoning: json['reasoning'] ?? '',
       alternativePredictions: List<String>.from(json['alternativePredictions'] ?? []),
-      risk: RiskAnalysis.fromJson(json['risk'] ?? {}),
+      risk: RiskAnalysis.fromJson(
+        json['risk'] != null && json['risk'] is Map
+            ? Map<String, dynamic>.from(json['risk'] as Map)
+            : {}
+      ),
     );
   }
   

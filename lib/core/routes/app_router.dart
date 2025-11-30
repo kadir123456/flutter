@@ -54,7 +54,7 @@ final router = GoRouter(
       path: '/analysis/:bulletinId',
       builder: (context, state) {
         final bulletinId = state.pathParameters['bulletinId']!;
-        final base64Image = state.extra as String; // Base64 image from upload
+        final base64Image = state.extra as String?; // Base64 image from upload (optional)
         return AnalysisScreen(
           bulletinId: bulletinId,
           base64Image: base64Image,

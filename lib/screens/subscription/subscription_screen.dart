@@ -689,12 +689,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Kredi Satın Al'),
-        content: Text('$credits kredi için ₺${price.toStringAsFixed(2)} ödeyeceksiniz.\n\nÖdeme sistemi yakında eklenecek.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue[700]),
+            const SizedBox(width: 12),
+            const Text('Bilgilendirme'),
+          ],
+        ),
+        content: const Text(
+          'Ödeme sistemi yakında eklenecek.\n\nGoogle Play üzerinden güvenli ödeme altyapısı ile kredi satın alabileceksiniz.',
+          style: TextStyle(fontSize: 15, height: 1.5),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Tamam'),
+            child: const Text('Tamam', style: TextStyle(fontSize: 16)),
           ),
         ],
       ),
@@ -705,12 +715,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Premium Satın Al'),
-        content: Text('$days günlük premium üyelik için ₺${price.toStringAsFixed(2)} ödeyeceksiniz.\n\nÖdeme sistemi yakında eklenecek.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue[700]),
+            const SizedBox(width: 12),
+            const Text('Bilgilendirme'),
+          ],
+        ),
+        content: const Text(
+          'Ödeme sistemi yakında eklenecek.\n\nGoogle Play üzerinden güvenli ödeme altyapısı ile premium abonelik satın alabileceksiniz.',
+          style: TextStyle(fontSize: 15, height: 1.5),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Tamam'),
+            child: const Text('Tamam', style: TextStyle(fontSize: 16)),
           ),
         ],
       ),

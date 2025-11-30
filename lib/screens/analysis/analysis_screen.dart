@@ -10,12 +10,12 @@ import '../../services/match_pool_service.dart';
 
 class AnalysisScreen extends StatefulWidget {
   final String bulletinId;
-  final String base64Image;
+  final String? base64Image; // Optional - null ise Firebase'den yükle
 
   const AnalysisScreen({
     super.key,
     required this.bulletinId,
-    required this.base64Image,
+    this.base64Image,
   });
 
   @override
@@ -37,14 +37,96 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   @override
   void initState() {
     super.initState();
-    _startAnalysis();
+    
+    // Eğer base64Image varsa -> Yeni analiz
+    // Eğer base64Image yoksa -> Firebase'den tamamlanmış analizi yükle
+    if (widget.base64Image != null) {
+      _startAnalysis();
+    } else {
+      _loadExistingAnalysis();
+    }
+  }
+
+  /// Firebase'den tamamlanmış analizi yükle (geçmiş görüntüleme için)
+  Future<void> _loadExistingAnalysis() async {
+    try {
+      setState(() {
+        _statusMessage = 'Analiz yükleniyor...';
+      });
+
+      final database = FirebaseDatabase.instance;
+      final snapshot = await database.ref('bulletins/${widget.bulletinId}').get();
+      
+      if (!snapshot.exists) {
+        throw Exception('Analiz bulunamadı');
+      }
+
+      final data = Map<String, dynamic>.from(snapshot.value as Map);
+      final matchesRaw = data['matches'];
+      
+      if (matchesRaw == null) {
+        throw Exception('Bu analizde maç bilgisi bulunamadı');
+      }
+
+      // Firebase'den gelen veriyi temiz Map listesine dönüştür
+      final List<Map<String, dynamic>> parsedMatches = [];
+      
+      if (matchesRaw is List) {
+        for (var match in matchesRaw) {
+          if (match != null) {
+            // Her bir match'i deep copy ile Map<String, dynamic>'e dönüştür
+            final matchMap = _deepConvertToMap(match);
+            parsedMatches.add(matchMap);
+          }
+        }
+      }
+      
+      if (parsedMatches.isEmpty) {
+        throw Exception('Maç bilgisi okunamadı');
+      }
+
+      print('✅ ${parsedMatches.length} maç yüklendi');
+
+      setState(() {
+        _isAnalyzing = false;
+        _analysisResults = parsedMatches;
+        _statusMessage = 'Analiz yüklendi';
+      });
+
+    } catch (e) {
+      print('❌ Analiz yükleme hatası: $e');
+      setState(() {
+        _isAnalyzing = false;
+        _errorMessage = e.toString();
+      });
+    }
+  }
+
+  /// Firebase LinkedMap'i Map<String, dynamic>'e deep convert
+  Map<String, dynamic> _deepConvertToMap(dynamic value) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(
+        value.map((key, val) => MapEntry(key.toString(), _deepConvertValue(val)))
+      );
+    }
+    return {};
+  }
+
+  /// Değerleri de dönüştür (recursive)
+  dynamic _deepConvertValue(dynamic value) {
+    if (value is Map) {
+      return _deepConvertToMap(value);
+    } else if (value is List) {
+      return value.map((item) => _deepConvertValue(item)).toList();
+    }
+    return value;
   }
 
   Future<void> _startAnalysis() async {
     try {
       // 1. Görseli Gemini ile analiz et (maçları çıkar)
       await _updateStatus('analyzing', 'Görsel analiz ediliyor...');
-      final geminiResponse = await _geminiService.analyzeImage(widget.base64Image);
+      final geminiResponse = await _geminiService.analyzeImage(widget.base64Image!);
       
       // JSON parse
       final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(geminiResponse);
