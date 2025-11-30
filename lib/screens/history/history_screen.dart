@@ -342,17 +342,52 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildError(BuildContext context, String error) {
+    // Firebase permission hatası kontrolü
+    final isPermissionError = error.contains('permission-denied') || error.contains('permission_denied');
+    
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 80, color: Colors.red[300]),
+            Icon(
+              isPermissionError ? Icons.lock_outline : Icons.error_outline,
+              size: 80,
+              color: isPermissionError ? Colors.orange[300] : Colors.red[300],
+            ),
             const SizedBox(height: 16),
-            Text('Bir Hata Oluştu', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              isPermissionError ? 'Veritabanı İzin Hatası' : 'Bir Hata Oluştu',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
-            Text(error, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600])),
+            Text(
+              isPermissionError
+                  ? 'Firebase Realtime Database güvenlik kuralları güncellenmeli.\n\nLütfen FIREBASE_RULES_KURULUM.md dosyasındaki talimatları takip edin.'
+                  : error,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            if (isPermissionError) ...[
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Proje ana dizinindeki FIREBASE_RULES_KURULUM.md dosyasına bakın'),
+                      duration: Duration(seconds: 4),
+                      backgroundColor: Colors.blue,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.help_outline),
+                label: const Text('Nasıl Düzeltirim?'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ],
           ],
         ),
       ),

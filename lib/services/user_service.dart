@@ -5,14 +5,86 @@ import '../models/credit_transaction_model.dart';
 class UserService {
   final FirebaseDatabase _database = FirebaseDatabase.instance;
   
-  // Kullanıcı oluştur veya güncelle
+  // IP ban kontrolü
+  Future<bool> checkIpBan(String? ipAddress, String? deviceId) async {
+    try {
+      if (ipAddress == null && deviceId == null) {
+        return false; // IP/Device ID yoksa ban kontrolü yapma
+      }
+
+      // Tüm kullanıcıları kontrol et
+      final usersRef = _database.ref('users');
+      final snapshot = await usersRef.get();
+      
+      if (!snapshot.exists || snapshot.value == null) {
+        return false;
+      }
+
+      final usersData = Map<String, dynamic>.from(snapshot.value as Map);
+      int accountCount = 0;
+      
+      // Aynı IP veya Device ID'ye sahip hesap sayısını say
+      usersData.forEach((uid, value) {
+        final userData = Map<String, dynamic>.from(value as Map);
+        final userIp = userData['ipAddress'];
+        final userDeviceId = userData['deviceId'];
+        
+        if ((ipAddress != null && userIp == ipAddress) ||
+            (deviceId != null && userDeviceId == deviceId)) {
+          accountCount++;
+        }
+      });
+      
+      // 1'den fazla hesap varsa ban
+      if (accountCount >= 1) {
+        print('⚠️ IP/Device ban kontrolü: $accountCount hesap bulundu');
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('❌ IP ban kontrolü hatası: $e');
+      return false;
+    }
+  }
+  
+  // Kullanıcıyı yasakla
+  Future<void> banUser(String uid) async {
+    try {
+      final userRef = _database.ref('users/$uid');
+      await userRef.update({'isBanned': true});
+      print('✅ Kullanıcı yasaklandı: $uid');
+    } catch (e) {
+      print('❌ Kullanıcı yasaklama hatası: $e');
+    }
+  }
+  
+  // Kullanıcı oluştur veya güncelle (KREDİ KORUMA İLE)
   Future<void> createOrUpdateUser(UserModel user) async {
     try {
       final ref = _database.ref('users/${user.uid}');
-      await ref.update(user.toMap());
-      print('✅ Kullanıcı Realtime Database\'e kaydedildi: ${user.uid}');
+      final snapshot = await ref.get();
+      
+      if (snapshot.exists && snapshot.value != null) {
+        // MEVCUT KULLANICI - Sadece lastLoginAt güncelle, KREDİLERİ KORU
+        final existingData = Map<String, dynamic>.from(snapshot.value as Map);
+        final existingUser = UserModel.fromJson(user.uid, existingData);
+        
+        await ref.update({
+          'lastLoginAt': user.lastLoginAt.millisecondsSinceEpoch,
+          'displayName': user.displayName ?? existingUser.displayName,
+          'photoUrl': user.photoUrl ?? existingUser.photoUrl,
+          'email': user.email,
+        });
+        
+        print('✅ Mevcut kullanıcı güncellendi (krediler korundu): ${user.uid}');
+      } else {
+        // YENİ KULLANICI - Tam veriyle kaydet
+        await ref.set(user.toMap());
+        print('✅ Yeni kullanıcı oluşturuldu (3 kredi ile): ${user.uid}');
+      }
     } catch (e) {
-      print('❌ Kullanıcı oluşturma hatası: $e');
+      print('❌ Kullanıcı oluşturma/güncelleme hatası: $e');
       rethrow;
     }
   }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:io' show Platform;
 import '../models/user_model.dart';
 import '../models/credit_transaction_model.dart';
 import '../services/user_service.dart';
@@ -9,6 +13,7 @@ class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   final UserService _userService = UserService();
+  final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   
   User? _user;
   UserModel? _userModel;
@@ -66,6 +71,19 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
       
+      // IP ve Device ID al
+      final ipAddress = await _getIpAddress();
+      final deviceId = await _getDeviceId();
+      
+      // IP BAN KONTROLÜ
+      final isBanned = await _userService.checkIpBan(ipAddress, deviceId);
+      if (isBanned) {
+        _isLoading = false;
+        _errorMessage = 'Bu cihazdan daha önce hesap oluşturulmuş.\n\nDestek ekibimizle iletişime geçin:\nbilwininc@gmail.com';
+        notifyListeners();
+        return false;
+      }
+      
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -84,12 +102,12 @@ class AuthProvider extends ChangeNotifier {
           credits: 3,
           createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
+          ipAddress: ipAddress,
+          deviceId: deviceId,
+          isBanned: false,
         );
         
         await _userService.createOrUpdateUser(newUser);
-        
-        // NOT: Kullanıcı zaten 3 kredi ile oluşturuldu, ekstra bonus yok
-        // await _userService.addCredits(...) kaldırıldı
         
         await _loadUserModel(_user!.uid);
         listenToUserModel(_user!.uid);
@@ -128,12 +146,24 @@ class AuthProvider extends ChangeNotifier {
       _user = _auth.currentUser;
       
       if (_user != null) {
+        // Kullanıcı ban kontrolü
+        final existingUser = await _userService.getUser(_user!.uid);
+        if (existingUser != null && existingUser.isBanned) {
+          await _auth.signOut();
+          _user = null;
+          _isLoading = false;
+          _errorMessage = 'Hesabınız askıya alınmıştır.\n\nDestek ekibimizle iletişime geçin:\nbilwininc@gmail.com';
+          notifyListeners();
+          return false;
+        }
+        
+        // Giriş başarılı - Sadece lastLoginAt güncelle (KREDİLER KORUNUR)
         await _userService.createOrUpdateUser(UserModel(
           uid: _user!.uid,
           email: _user!.email ?? email,
           displayName: _user!.displayName,
           photoUrl: _user!.photoURL,
-          createdAt: DateTime.now(),
+          createdAt: existingUser?.createdAt ?? DateTime.now(),
           lastLoginAt: DateTime.now(),
         ));
         
@@ -185,6 +215,21 @@ class AuthProvider extends ChangeNotifier {
         final existingUser = await _userService.getUser(_user!.uid);
         
         if (existingUser == null) {
+          // YENİ KULLANICI - IP BAN KONTROLÜ
+          final ipAddress = await _getIpAddress();
+          final deviceId = await _getDeviceId();
+          
+          final isBanned = await _userService.checkIpBan(ipAddress, deviceId);
+          if (isBanned) {
+            await _auth.signOut();
+            await _googleSignIn.signOut();
+            _user = null;
+            _isLoading = false;
+            _errorMessage = 'Bu cihazdan daha önce hesap oluşturulmuş.\n\nDestek ekibimizle iletişime geçin:\nbilwininc@gmail.com';
+            notifyListeners();
+            return false;
+          }
+          
           final newUser = UserModel(
             uid: _user!.uid,
             email: _user!.email ?? '',
@@ -193,13 +238,25 @@ class AuthProvider extends ChangeNotifier {
             credits: 3,
             createdAt: DateTime.now(),
             lastLoginAt: DateTime.now(),
+            ipAddress: ipAddress,
+            deviceId: deviceId,
+            isBanned: false,
           );
           
           await _userService.createOrUpdateUser(newUser);
-          
-          // NOT: Kullanıcı zaten 3 kredi ile oluşturuldu, ekstra bonus yok
-          // await _userService.addCredits(...) kaldırıldı
         } else {
+          // MEVCUT KULLANICI - Ban kontrolü
+          if (existingUser.isBanned) {
+            await _auth.signOut();
+            await _googleSignIn.signOut();
+            _user = null;
+            _isLoading = false;
+            _errorMessage = 'Hesabınız askıya alınmıştır.\n\nDestek ekibimizle iletişime geçin:\nbilwininc@gmail.com';
+            notifyListeners();
+            return false;
+          }
+          
+          // Sadece lastLoginAt güncelle (KREDİLER KORUNUR)
           await _userService.createOrUpdateUser(UserModel(
             uid: _user!.uid,
             email: _user!.email ?? '',
@@ -347,5 +404,35 @@ class AuthProvider extends ChangeNotifier {
     if (_user != null) {
       await _loadUserModel(_user!.uid);
     }
+  }
+  
+  // IP adresini al
+  Future<String?> _getIpAddress() async {
+    try {
+      final response = await http.get(Uri.parse('https://api.ipify.org?format=json'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['ip'];
+      }
+    } catch (e) {
+      print('⚠️ IP adresi alınamadı: $e');
+    }
+    return null;
+  }
+  
+  // Cihaz ID'sini al
+  Future<String?> _getDeviceId() async {
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await _deviceInfo.androidInfo;
+        return androidInfo.id; // Android ID
+      } else if (Platform.isIOS) {
+        final iosInfo = await _deviceInfo.iosInfo;
+        return iosInfo.identifierForVendor; // iOS Vendor ID
+      }
+    } catch (e) {
+      print('⚠️ Device ID alınamadı: $e');
+    }
+    return null;
   }
 }

@@ -46,6 +46,9 @@ dependencies:
   # Local Storage
   shared_preferences: ^2.3.4
   
+  # Device Info (IP ban sistemi için)
+  device_info_plus: ^10.1.0
+  
   # UI & Fonts
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1

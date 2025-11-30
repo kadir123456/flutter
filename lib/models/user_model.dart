@@ -11,6 +11,9 @@ class UserModel {
   final bool isPremium; // Premium abonelik durumu
   final DateTime? premiumExpiresAt;
   final int totalAnalysisCount; // Toplam yapılan analiz sayısı
+  final String? ipAddress; // IP ban sistemi için
+  final String? deviceId; // Cihaz ID (IP ban sistemi için)
+  final bool isBanned; // Ban durumu
   
   UserModel({
     required this.uid,
@@ -23,6 +26,9 @@ class UserModel {
     this.isPremium = false,
     this.premiumExpiresAt,
     this.totalAnalysisCount = 0,
+    this.ipAddress,
+    this.deviceId,
+    this.isBanned = false,
   });
   
   // Realtime Database'den user oluştur
@@ -44,6 +50,9 @@ class UserModel {
           ? DateTime.fromMillisecondsSinceEpoch(data['premiumExpiresAt'] as int)
           : null,
       totalAnalysisCount: data['totalAnalysisCount'] ?? 0,
+      ipAddress: data['ipAddress'],
+      deviceId: data['deviceId'],
+      isBanned: data['isBanned'] ?? false,
     );
   }
   
@@ -59,6 +68,9 @@ class UserModel {
       'isPremium': isPremium,
       'premiumExpiresAt': premiumExpiresAt?.millisecondsSinceEpoch,
       'totalAnalysisCount': totalAnalysisCount,
+      'ipAddress': ipAddress,
+      'deviceId': deviceId,
+      'isBanned': isBanned,
     };
   }
   
@@ -75,6 +87,9 @@ class UserModel {
       isPremium: isPremium,
       premiumExpiresAt: premiumExpiresAt,
       totalAnalysisCount: totalAnalysisCount,
+      ipAddress: ipAddress,
+      deviceId: deviceId,
+      isBanned: isBanned,
     );
   }
   
@@ -91,6 +106,9 @@ class UserModel {
       isPremium: isPremium,
       premiumExpiresAt: premiumExpiresAt,
       totalAnalysisCount: totalAnalysisCount + 1,
+      ipAddress: ipAddress,
+      deviceId: deviceId,
+      isBanned: isBanned,
     );
   }
   
@@ -107,6 +125,9 @@ class UserModel {
       isPremium: true,
       premiumExpiresAt: expiresAt,
       totalAnalysisCount: totalAnalysisCount,
+      ipAddress: ipAddress,
+      deviceId: deviceId,
+      isBanned: isBanned,
     );
   }
   
