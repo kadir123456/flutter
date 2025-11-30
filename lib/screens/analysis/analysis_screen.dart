@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/bulletin_provider.dart';
 import '../../services/gemini_service.dart';
 import '../../services/football_api_service.dart';
+import '../../services/match_pool_service.dart';
 
 class AnalysisScreen extends StatefulWidget {
   final String bulletinId;
@@ -24,6 +25,7 @@ class AnalysisScreen extends StatefulWidget {
 class _AnalysisScreenState extends State<AnalysisScreen> {
   final GeminiService _geminiService = GeminiService();
   final FootballApiService _footballApi = FootballApiService();
+  final MatchPoolService _matchPool = MatchPoolService();
   final BulletinProvider _bulletinProvider = BulletinProvider();
 
   bool _isAnalyzing = true;
@@ -90,16 +92,17 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  /// ⭐ YENİ: Football API + Google Search ile analiz
+  /// ⭐ YENİ: Firebase Havuzu + Google Search ile analiz
   Future<void> _analyzeAllMatchesInBatch(List<Map<String, dynamic>> matches) async {
     try {
       setState(() {
-        _statusMessage = 'Football API\'den veriler toplanıyor...';
+        _statusMessage = '🔥 Firebase havuzundan veriler alınıyor...';
       });
 
-      // 1. Football API verilerini topla
+      // 1. Firebase havuzundan maçları eşleştir
       List<Map<String, dynamic>> matchesWithStats = [];
-      int foundCount = 0;
+      int poolFoundCount = 0;
+      int apiFoundCount = 0;
       
       for (int i = 0; i < matches.length; i++) {
         final match = matches[i];
@@ -111,30 +114,62 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           _statusMessage = 'Maç ${i + 1}/${matches.length}: $homeTeam vs $awayTeam';
         });
 
-        // Rate limit için bekleme
-        if (i > 0) await Future.delayed(const Duration(milliseconds: 800));
+        // ⭐ ÖNCELİKLE HAVUZDA ARA
+        final poolMatch = await _matchPool.findMatchInPool(homeTeam, awayTeam);
         
-        // Football API'de ara
-        final homeData = await _getTeamDataFromFootballApi(homeTeam);
-        if (homeData['found']) foundCount++;
-        
-        await Future.delayed(const Duration(milliseconds: 800));
-        
-        final awayData = await _getTeamDataFromFootballApi(awayTeam);
-        if (awayData['found']) foundCount++;
-
-        matchesWithStats.add({
-          'homeTeam': homeTeam,
-          'awayTeam': awayTeam,
-          'userPrediction': userPrediction,
-          'homeData': homeData,
-          'awayData': awayData,
-        });
-
-        print('  Maç ${i + 1}: ${homeData['found'] ? '✅' : '❌'} $homeTeam vs ${awayData['found'] ? '✅' : '❌'} $awayTeam');
+        if (poolMatch != null) {
+          // ✅ Havuzda bulundu - HIZLI!
+          poolFoundCount++;
+          
+          matchesWithStats.add({
+            'homeTeam': homeTeam,
+            'awayTeam': awayTeam,
+            'userPrediction': userPrediction,
+            'homeData': {
+              'found': true,
+              'name': poolMatch.homeTeam,
+              'teamId': poolMatch.homeTeamId,
+              'leagueId': poolMatch.leagueId,
+              'stats': poolMatch.homeStats,
+              'lastMatches': [],
+            },
+            'awayData': {
+              'found': true,
+              'name': poolMatch.awayTeam,
+              'teamId': poolMatch.awayTeamId,
+              'leagueId': poolMatch.leagueId,
+              'stats': poolMatch.awayStats,
+              'lastMatches': [],
+            },
+            'dataSource': 'firebase-pool', // ⭐ Veri kaynağı işaretle
+          });
+          
+          print('  Maç ${i + 1}: 🔥 HAVUZDA BULUNDU - $homeTeam vs $awayTeam');
+        } else {
+          // ⚠️ Havuzda yok, fallback: Football API
+          print('  Maç ${i + 1}: ⚠️ Havuzda yok, Football API kullanılıyor...');
+          
+          await Future.delayed(const Duration(milliseconds: 800));
+          final homeData = await _getTeamDataFromFootballApi(homeTeam);
+          if (homeData['found']) apiFoundCount++;
+          
+          await Future.delayed(const Duration(milliseconds: 800));
+          final awayData = await _getTeamDataFromFootballApi(awayTeam);
+          if (awayData['found']) apiFoundCount++;
+          
+          matchesWithStats.add({
+            'homeTeam': homeTeam,
+            'awayTeam': awayTeam,
+            'userPrediction': userPrediction,
+            'homeData': homeData,
+            'awayData': awayData,
+            'dataSource': 'football-api', // ⭐ Veri kaynağı işaretle
+          });
+        }
       }
 
-      print('📊 Football API: $foundCount/${matches.length * 2} takım bulundu');
+      print('📊 Firebase Havuz: $poolFoundCount/${matches.length} maç bulundu');
+      print('📊 Football API: $apiFoundCount/${matches.length - poolFoundCount} maç çekildi');
 
       // 2. Google Search Prompt Oluştur
       setState(() {
@@ -177,16 +212,37 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       }
 
       final teamId = teamInfo['team']?['id'];
-      final stats = await _footballApi.getTeamStats(teamId);
-      final lastMatches = await _footballApi.getLastMatches(teamId);
+      final leagues = teamInfo['leagues'] as List<int>? ?? [];
+      
+      // ⭐ Lig yoksa istatistik alınamaz
+      if (leagues.isEmpty) {
+        print('⚠️ $teamName için lig bilgisi yok');
+        return {
+          'found': true,
+          'name': teamInfo['team']?['name'] ?? teamName,
+          'teamId': teamId,
+          'stats': null,
+          'lastMatches': [],
+        };
+      }
+
+      // İlk ligi kullan (genelde en önemli lig)
+      final leagueId = leagues.first;
+      
+      // İstatistikleri al (league parametresi ile)
+      final stats = await _footballApi.getTeamStats(teamId, leagueId);
+      final lastMatches = await _footballApi.getLastMatches(teamId, limit: 5);
 
       return {
         'found': true,
         'name': teamInfo['team']?['name'] ?? teamName,
+        'teamId': teamId,
+        'leagueId': leagueId,
         'stats': stats,
         'lastMatches': lastMatches,
       };
     } catch (e) {
+      print('❌ Team data error ($teamName): $e');
       return {'found': false, 'name': teamName};
     }
   }

@@ -15,33 +15,36 @@ class FootballApiService {
   /// Takım bilgisi getir (isim ile arama - akıllı arama)
   Future<Map<String, dynamic>?> searchTeam(String teamName) async {
     try {
-      // ⭐ YENİ: Türkçe karakterleri temizle
       final cleanName = _cleanTurkishChars(teamName);
       print('🔍 Aranıyor: $teamName → $cleanName');
       
       final url = Uri.parse('$_baseUrl/teams?search=$cleanName');
-
-      final response = await http.get(
-        url,
-        headers: {
-          'x-rapidapi-host': 'v3.football.api-sports.io',
-          'x-rapidapi-key': _apiKey,
-        },
-      );
+      final response = await http.get(url, headers: {
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
+      });
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final teams = data['response'] as List?;
         
         if (teams != null && teams.isNotEmpty) {
-          print('✅ Bulundu: ${teams.first['team']['name']}');
-          return teams.first;
+          final team = teams.first;
+          print('✅ Bulundu: ${team['team']['name']} (ID: ${team['team']['id']})');
+          
+          // ⭐ YENİ: Takımın oynadığı ligleri de getir
+          final teamId = team['team']['id'];
+          final leagues = await _getTeamLeagues(teamId);
+          
+          return {
+            ...team,
+            'leagues': leagues, // ⭐ Ligleri ekle
+          };
         }
         
         print('❌ Bulunamadı: $teamName');
         return null;
       } else if (response.statusCode == 429) {
-        // ⭐ YENİ: Rate limit handling
         print('⚠️ Rate limit! 2 saniye bekleniyor...');
         await Future.delayed(const Duration(seconds: 2));
         return null;
@@ -51,6 +54,43 @@ class FootballApiService {
     } catch (e) {
       print('❌ Football API Search Error: $e');
       return null;
+    }
+  }
+
+  /// ⭐ YENİ: Takımın oynadığı ligleri getir
+  Future<List<int>> _getTeamLeagues(int teamId) async {
+    try {
+      final season = DateTime.now().year;
+      final url = Uri.parse('$_baseUrl/teams/seasons?team=$teamId');
+      
+      final response = await http.get(url, headers: {
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final seasons = data['response'] as List?;
+        
+        if (seasons != null && seasons.isNotEmpty) {
+          // Son sezondaki ligleri al
+          final recentSeason = seasons.firstWhere(
+            (s) => s['year'] == season || s['year'] == season - 1,
+            orElse: () => seasons.first,
+          );
+          
+          final leagues = recentSeason['leagues'] as List?;
+          if (leagues != null && leagues.isNotEmpty) {
+            // Lig ID'lerini çıkar
+            return leagues.map<int>((l) => l['league']['id'] as int).toList();
+          }
+        }
+      }
+      
+      return [];
+    } catch (e) {
+      print('⚠️ Ligler alınamadı: $e');
+      return [];
     }
   }
 
@@ -70,28 +110,41 @@ class FootballApiService {
     return clean;
   }
 
-  /// Takım istatistikleri getir
-  Future<Map<String, dynamic>?> getTeamStats(int teamId, {int? season}) async {
-    season ??= DateTime.now().year;
+  /// Takım istatistikleri (league ZORUNLU!)
+  Future<Map<String, dynamic>?> getTeamStats(int teamId, int leagueId) async {
     try {
-      final url = Uri.parse('$_baseUrl/teams/statistics?team=$teamId&season=$season&league=203'); // Türkiye Süper Lig
+      final season = DateTime.now().year;
+      
+      print('📊 İstatistik alınıyor: Team=$teamId, League=$leagueId, Season=$season');
+      
+      final url = Uri.parse('$_baseUrl/teams/statistics?team=$teamId&season=$season&league=$leagueId');
 
-      final response = await http.get(
-        url,
-        headers: {
-          'x-rapidapi-host': 'v3.football.api-sports.io',
-          'x-rapidapi-key': _apiKey,
-        },
-      );
+      final response = await http.get(url, headers: {
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
+      });
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        
+        // Boş response kontrolü
+        if (data['response'] == null || 
+            (data['response'] is Map && (data['response'] as Map).isEmpty)) {
+          print('⚠️ İstatistik verisi yok');
+          return null;
+        }
+        
+        print('✅ İstatistik alındı');
         return data['response'];
+      } else if (response.statusCode == 429) {
+        print('⚠️ Rate limit!');
+        return null;
       } else {
-        throw Exception('Football API error: ${response.statusCode}');
+        print('❌ API Error: ${response.statusCode}');
+        return null;
       }
     } catch (e) {
-      print('❌ Football API Stats Error: $e');
+      print('❌ Stats Error: $e');
       return null;
     }
   }
@@ -99,25 +152,35 @@ class FootballApiService {
   /// Son 5 maç sonucu
   Future<List<Map<String, dynamic>>> getLastMatches(int teamId, {int limit = 5}) async {
     try {
+      print('🔄 Son $limit maç alınıyor: Team=$teamId');
+      
       final url = Uri.parse('$_baseUrl/fixtures?team=$teamId&last=$limit');
 
-      final response = await http.get(
-        url,
-        headers: {
-          'x-rapidapi-host': 'v3.football.api-sports.io',
-          'x-rapidapi-key': _apiKey,
-        },
-      );
+      final response = await http.get(url, headers: {
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
+      });
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final fixtures = data['response'] as List?;
-        return fixtures?.cast<Map<String, dynamic>>() ?? [];
+        
+        if (fixtures != null && fixtures.isNotEmpty) {
+          print('✅ ${fixtures.length} maç alındı');
+          return fixtures.cast<Map<String, dynamic>>();
+        }
+        
+        print('⚠️ Maç verisi yok');
+        return [];
+      } else if (response.statusCode == 429) {
+        print('⚠️ Rate limit!');
+        return [];
       } else {
-        throw Exception('Football API error: ${response.statusCode}');
+        print('❌ API Error: ${response.statusCode}');
+        return [];
       }
     } catch (e) {
-      print('❌ Football API Matches Error: $e');
+      print('❌ Last Matches Error: $e');
       return [];
     }
   }
