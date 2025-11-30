@@ -1,6 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/iap_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -12,16 +14,76 @@ class SubscriptionScreen extends StatefulWidget {
 class _SubscriptionScreenState extends State<SubscriptionScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final InAppPurchaseService _iapService = InAppPurchaseService();
+  bool _isIapReady = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _initializeIAP();
+  }
+  
+  Future<void> _initializeIAP() async {
+    await _iapService.initialize();
+    
+    // Satın alma başarı callback'i
+    _iapService.onPurchaseSuccess = (PurchaseDetails purchaseDetails) {
+      _handlePurchaseSuccess(purchaseDetails);
+    };
+    
+    // Hata callback'i
+    _iapService.onPurchaseError = (String error) {
+      _showErrorDialog('Satın alma hatası: $error');
+    };
+    
+    setState(() {
+      _isIapReady = _iapService.isAvailable;
+    });
+    
+    if (!_isIapReady) {
+      _showErrorDialog(
+        'Satın alma servisi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.'
+      );
+    }
+  }
+  
+  Future<void> _handlePurchaseSuccess(PurchaseDetails purchaseDetails) async {
+    final authProvider = context.read<AuthProvider>();
+    final productId = purchaseDetails.productID;
+    final purchaseId = purchaseDetails.purchaseID ?? '';
+    
+    // Premium ürün mü kontrol et
+    if (_iapService.isPremiumProduct(productId)) {
+      final days = _iapService.getPremiumDaysFromProduct(productId);
+      final success = await authProvider.activatePremium(
+        days,
+        productId,
+        purchaseId,
+      );
+      
+      if (success && mounted) {
+        _showSuccessDialog('Premium üyeliğiniz başarıyla aktif edildi!');
+      }
+    } else {
+      // Kredi paketi
+      final credits = _iapService.getCreditAmountFromProduct(productId);
+      final success = await authProvider.addCredits(
+        credits,
+        productId,
+        purchaseId,
+      );
+      
+      if (success && mounted) {
+        _showSuccessDialog('$credits kredi hesabınıza eklendi!');
+      }
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _iapService.dispose();
     super.dispose();
   }
 
@@ -54,6 +116,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
     final packages = [
       {
+        'productId': InAppPurchaseService.credit5,
         'credits': 5,
         'price': 29.99,
         'bonus': 0,
@@ -61,6 +124,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'color': Colors.blue,
       },
       {
+        'productId': InAppPurchaseService.credit10,
         'credits': 10,
         'price': 49.99,
         'bonus': 2,
@@ -68,6 +132,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'color': Colors.purple,
       },
       {
+        'productId': InAppPurchaseService.credit25,
         'credits': 25,
         'price': 99.99,
         'bonus': 5,
@@ -75,6 +140,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'color': Colors.orange,
       },
       {
+        'productId': InAppPurchaseService.credit50,
         'credits': 50,
         'price': 179.99,
         'bonus': 15,
@@ -147,6 +213,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
           // Kredi Paketleri
           ...packages.map((package) => _buildCreditPackageCard(
                 context,
+                productId: package['productId'] as String,
                 credits: package['credits'] as int,
                 price: package['price'] as double,
                 bonus: package['bonus'] as int,
@@ -160,6 +227,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
   Widget _buildCreditPackageCard(
     BuildContext context, {
+    required String productId,
     required int credits,
     required double price,
     required int bonus,
@@ -301,7 +369,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
                 // Satın Al Butonu
                 ElevatedButton(
-                  onPressed: () => _handleCreditPurchase(context, credits, price),
+                  onPressed: _isIapReady
+                      ? () => _handleCreditPurchase(productId)
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: color,
                     foregroundColor: Colors.white,
@@ -332,6 +402,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
     final packages = [
       {
+        'productId': InAppPurchaseService.premiumMonthly,
         'duration': 'Aylık',
         'days': 30,
         'price': 899.00,
@@ -339,6 +410,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'icon': Icons.calendar_today,
       },
       {
+        'productId': InAppPurchaseService.premium3Months,
         'duration': '3 Aylık',
         'days': 90,
         'price': 1999.00,
@@ -348,6 +420,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'discount': '%26 İndirim',
       },
       {
+        'productId': InAppPurchaseService.premiumYearly,
         'duration': 'Yıllık',
         'days': 365,
         'price': 6999.00,
@@ -417,6 +490,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
           // Premium Paketleri
           ...packages.map((package) => _buildPremiumPackageCard(
                 context,
+                productId: package['productId'] as String,
                 duration: package['duration'] as String,
                 days: package['days'] as int,
                 price: package['price'] as double,
@@ -453,6 +527,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
   Widget _buildPremiumPackageCard(
     BuildContext context, {
+    required String productId,
     required String duration,
     required int days,
     required double price,
@@ -584,7 +659,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => _handlePremiumPurchase(context, days, price),
+                    onPressed: _isIapReady
+                        ? () => _handlePremiumPurchase(productId)
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: color,
                       foregroundColor: Colors.white,
@@ -685,21 +762,81 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     );
   }
 
-  void _handleCreditPurchase(BuildContext context, int credits, double price) {
+  Future<void> _handleCreditPurchase(String productId) async {
+    if (!_isIapReady) {
+      _showErrorDialog('Satın alma servisi hazır değil. Lütfen daha sonra tekrar deneyin.');
+      return;
+    }
+    
+    // Loading göster
+    _showLoadingDialog();
+    
+    try {
+      final success = await _iapService.purchaseProduct(productId);
+      
+      // Loading kapat
+      if (mounted) Navigator.of(context).pop();
+      
+      if (!success) {
+        _showErrorDialog('Satın alma başlatılamadı. Lütfen tekrar deneyin.');
+      }
+    } catch (e) {
+      // Loading kapat
+      if (mounted) Navigator.of(context).pop();
+      _showErrorDialog('Bir hata oluştu: $e');
+    }
+  }
+
+  Future<void> _handlePremiumPurchase(String productId) async {
+    if (!_isIapReady) {
+      _showErrorDialog('Satın alma servisi hazır değil. Lütfen daha sonra tekrar deneyin.');
+      return;
+    }
+    
+    // Loading göster
+    _showLoadingDialog();
+    
+    try {
+      final success = await _iapService.purchaseProduct(productId);
+      
+      // Loading kapat
+      if (mounted) Navigator.of(context).pop();
+      
+      if (!success) {
+        _showErrorDialog('Satın alma başlatılamadı. Lütfen tekrar deneyin.');
+      }
+    } catch (e) {
+      // Loading kapat
+      if (mounted) Navigator.of(context).pop();
+      _showErrorDialog('Bir hata oluştu: $e');
+    }
+  }
+  
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+  
+  void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.blue[700]),
+            Icon(Icons.error_outline, color: Colors.red[700]),
             const SizedBox(width: 12),
-            const Text('Bilgilendirme'),
+            const Text('Hata'),
           ],
         ),
-        content: const Text(
-          'Ödeme sistemi yakında eklenecek.\n\nGoogle Play üzerinden güvenli ödeme altyapısı ile kredi satın alabileceksiniz.',
-          style: TextStyle(fontSize: 15, height: 1.5),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 15, height: 1.5),
         ),
         actions: [
           TextButton(
@@ -710,22 +847,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       ),
     );
   }
-
-  void _handlePremiumPurchase(BuildContext context, int days, double price) {
+  
+  void _showSuccessDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.blue[700]),
+            Icon(Icons.check_circle_outline, color: Colors.green[700]),
             const SizedBox(width: 12),
-            const Text('Bilgilendirme'),
+            const Text('Başarılı'),
           ],
         ),
-        content: const Text(
-          'Ödeme sistemi yakında eklenecek.\n\nGoogle Play üzerinden güvenli ödeme altyapısı ile premium abonelik satın alabileceksiniz.',
-          style: TextStyle(fontSize: 15, height: 1.5),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 15, height: 1.5),
         ),
         actions: [
           TextButton(

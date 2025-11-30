@@ -211,9 +211,7 @@ class ProfileScreen extends StatelessWidget {
               title: 'Hesap Bilgileri',
               subtitle: 'Ad, soyad, e-posta',
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Yakında eklenecek')),
-                );
+                context.push('/account-settings');
               },
             ),
             _buildListTile(
@@ -256,9 +254,7 @@ class ProfileScreen extends StatelessWidget {
               title: 'Bildirimler',
               subtitle: 'Bildirim tercihleri',
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Yakında eklenecek')),
-                );
+                context.push('/notification-settings');
               },
             ),
             _buildListTile(

@@ -9,20 +9,24 @@ class InAppPurchaseService {
   late StreamSubscription<List<PurchaseDetails>> _subscription;
   
   // Product ID'leri - Google Play Console'da tanımlanacak
+  static const String credit5 = 'credits_5';
   static const String credit10 = 'credits_10';
   static const String credit25 = 'credits_25';
   static const String credit50 = 'credits_50';
   static const String credit100 = 'credits_100';
   static const String premiumMonthly = 'premium_monthly';
+  static const String premium3Months = 'premium_3months';
   static const String premiumYearly = 'premium_yearly';
   
   // Tüm ürün ID'leri
   static const Set<String> _productIds = {
+    credit5,
     credit10,
     credit25,
     credit50,
     credit100,
     premiumMonthly,
+    premium3Months,
     premiumYearly,
   };
   
@@ -125,7 +129,7 @@ class InAppPurchaseService {
     
     try {
       // Premium abonelikler için
-      if (productId == premiumMonthly || productId == premiumYearly) {
+      if (productId == premiumMonthly || productId == premium3Months || productId == premiumYearly) {
         return await _inAppPurchase.buyNonConsumable(
           purchaseParam: purchaseParam,
         );
@@ -182,6 +186,8 @@ class InAppPurchaseService {
   // Kredi miktarını product ID'den al
   int getCreditAmountFromProduct(String productId) {
     switch (productId) {
+      case credit5:
+        return 5;
       case credit10:
         return 10;
       case credit25:
@@ -200,6 +206,8 @@ class InAppPurchaseService {
     switch (productId) {
       case premiumMonthly:
         return 30;
+      case premium3Months:
+        return 90;
       case premiumYearly:
         return 365;
       default:
@@ -209,7 +217,7 @@ class InAppPurchaseService {
   
   // Premium ürün mü?
   bool isPremiumProduct(String productId) {
-    return productId == premiumMonthly || productId == premiumYearly;
+    return productId == premiumMonthly || productId == premium3Months || productId == premiumYearly;
   }
   
   // Temizle
