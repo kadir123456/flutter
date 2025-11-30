@@ -15,52 +15,11 @@ class FootballApiService {
   /// Takım bilgisi getir (isim ile arama - akıllı arama)
   Future<Map<String, dynamic>?> searchTeam(String teamName) async {
     try {
-      // İlk deneme: Orijinal isim
-      var result = await _searchTeamByName(teamName);
-      if (result != null) return result;
-
-      // İkinci deneme: "B" yerine "II" dene
-      if (teamName.contains(' B')) {
-        final altName = teamName.replaceAll(' B', ' II');
-        result = await _searchTeamByName(altName);
-        if (result != null) {
-          print('✅ Alternatif isimle bulundu: $teamName -> $altName');
-          return result;
-        }
-      }
-
-      // Üçüncü deneme: "II" yerine "B" dene
-      if (teamName.contains(' II')) {
-        final altName = teamName.replaceAll(' II', ' B');
-        result = await _searchTeamByName(altName);
-        if (result != null) {
-          print('✅ Alternatif isimle bulundu: $teamName -> $altName');
-          return result;
-        }
-      }
-
-      // Dördüncü deneme: Sadece ana takım ismi (UD, SD, CE gibi önekleri kaldır)
-      final cleanName = _cleanTeamName(teamName);
-      if (cleanName != teamName) {
-        result = await _searchTeamByName(cleanName);
-        if (result != null) {
-          print('✅ Temiz isimle bulundu: $teamName -> $cleanName');
-          return result;
-        }
-      }
-
-      print('⚠️ Takım bulunamadı (tüm varyasyonlar denendi): $teamName');
-      return null;
-    } catch (e) {
-      print('❌ Football API Search Error: $e');
-      return null;
-    }
-  }
-
-  /// Gerçek API çağrısı
-  Future<Map<String, dynamic>?> _searchTeamByName(String teamName) async {
-    try {
-      final url = Uri.parse('$_baseUrl/teams?search=$teamName');
+      // ⭐ YENİ: Türkçe karakterleri temizle
+      final cleanName = _cleanTurkishChars(teamName);
+      print('🔍 Aranıyor: $teamName → $cleanName');
+      
+      final url = Uri.parse('$_baseUrl/teams?search=$cleanName');
 
       final response = await http.get(
         url,
@@ -75,30 +34,45 @@ class FootballApiService {
         final teams = data['response'] as List?;
         
         if (teams != null && teams.isNotEmpty) {
+          print('✅ Bulundu: ${teams.first['team']['name']}');
           return teams.first;
         }
+        
+        print('❌ Bulunamadı: $teamName');
         return null;
+      } else if (response.statusCode == 429) {
+        // ⭐ YENİ: Rate limit handling
+        print('⚠️ Rate limit! 2 saniye bekleniyor...');
+        await Future.delayed(const Duration(seconds: 2));
+        return null;
+      } else {
+        throw Exception('Football API error: ${response.statusCode}');
       }
-      return null;
     } catch (e) {
+      print('❌ Football API Search Error: $e');
       return null;
     }
   }
 
-  /// Takım ismini temizle (UD, SD, CE gibi önekleri kaldır)
-  String _cleanTeamName(String teamName) {
-    // Önekleri kaldır
-    final prefixes = ['UD ', 'SD ', 'CE ', 'CD ', 'CA ', 'UE ', 'CF '];
-    for (final prefix in prefixes) {
-      if (teamName.startsWith(prefix)) {
-        return teamName.substring(prefix.length);
-      }
-    }
-    return teamName;
+  /// Türkçe karakterleri temizle
+  String _cleanTurkishChars(String text) {
+    final map = {
+      'ç': 'c', 'Ç': 'C', 'ğ': 'g', 'Ğ': 'G',
+      'ı': 'i', 'İ': 'I', 'ö': 'o', 'Ö': 'O',
+      'ş': 's', 'Ş': 'S', 'ü': 'u', 'Ü': 'U',
+    };
+    
+    var clean = text;
+    map.forEach((turkish, english) {
+      clean = clean.replaceAll(turkish, english);
+    });
+    
+    return clean;
   }
 
   /// Takım istatistikleri getir
-  Future<Map<String, dynamic>?> getTeamStats(int teamId, int season) async {
+  Future<Map<String, dynamic>?> getTeamStats(int teamId, {int? season}) async {
+    season ??= DateTime.now().year;
     try {
       final url = Uri.parse('$_baseUrl/teams/statistics?team=$teamId&season=$season&league=203'); // Türkiye Süper Lig
 
@@ -123,7 +97,7 @@ class FootballApiService {
   }
 
   /// Son 5 maç sonucu
-  Future<List<Map<String, dynamic>>> getLastMatches(int teamId, int limit) async {
+  Future<List<Map<String, dynamic>>> getLastMatches(int teamId, {int limit = 5}) async {
     try {
       final url = Uri.parse('$_baseUrl/fixtures?team=$teamId&last=$limit');
 

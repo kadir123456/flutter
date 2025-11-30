@@ -12,9 +12,10 @@ class GeminiService {
   
   String get _apiKey => _remoteConfig.geminiApiKey;
 
-  /// Gemini 2.5 Pro ile görsel analizi
+  /// Gemini 2.0 Flash Thinking Exp ile görsel analizi
   Future<String> analyzeImage(String base64Image) async {
     try {
+      // ⭐ DEĞİŞTİ: gemini-2.5-pro → gemini-2.0-flash-thinking-exp
       final url = Uri.parse('$_baseUrl/gemini-2.5-pro:generateContent?key=$_apiKey');
 
       final body = jsonEncode({
@@ -119,6 +120,56 @@ Sadece JSON döndür, başka açıklama yazma.'''
       }
     } catch (e) {
       print('❌ Gemini Text Analysis Error: $e');
+      rethrow;
+    }
+  }
+
+  /// ⭐ YENİ METOD: Google Search ile analiz
+  Future<String> analyzeWithGoogleSearch(String prompt) async {
+    try {
+      print('🔍 Google Search ile analiz başlatılıyor...');
+      
+      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-thinking-exp:generateContent?key=$_apiKey');
+
+      final body = jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
+        'generationConfig': {
+          'temperature': 0.1,
+          'topK': 20,
+          'topP': 0.9,
+          'maxOutputTokens': 8192,
+        },
+        // ⭐ GOOGLE SEARCH AKTİF
+        'tools': [
+          {
+            'googleSearch': {}
+          }
+        ]
+      });
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+        
+        print('✅ Google Search analizi tamamlandı');
+        return text;
+      } else {
+        throw Exception('Gemini API error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Gemini Google Search Error: $e');
       rethrow;
     }
   }

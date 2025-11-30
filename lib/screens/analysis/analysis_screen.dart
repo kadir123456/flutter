@@ -90,62 +90,75 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  /// ⭐ YENİ: Tüm maçları tek Gemini isteğinde analiz et
+  /// ⭐ YENİ: Football API + Google Search ile analiz
   Future<void> _analyzeAllMatchesInBatch(List<Map<String, dynamic>> matches) async {
     try {
       setState(() {
-        _statusMessage = '${matches.length} maç için istatistikler toplanıyor...';
+        _statusMessage = 'Football API\'den veriler toplanıyor...';
       });
 
-      // 1. Tüm maçlar için Football API'den istatistikleri topla
+      // 1. Football API verilerini topla
       List<Map<String, dynamic>> matchesWithStats = [];
+      int foundCount = 0;
       
       for (int i = 0; i < matches.length; i++) {
         final match = matches[i];
         final homeTeam = match['homeTeam'] ?? '';
         final awayTeam = match['awayTeam'] ?? '';
+        final userPrediction = match['userPrediction'] ?? '?';
 
         setState(() {
           _statusMessage = 'Maç ${i + 1}/${matches.length}: $homeTeam vs $awayTeam';
         });
 
-        // Football API'den takım bilgisi çek (Rate limit için bekleme)
+        // Rate limit için bekleme
         if (i > 0) await Future.delayed(const Duration(milliseconds: 800));
         
-        final homeStats = await _getTeamStatsWithFallback(homeTeam);
+        // Football API'de ara
+        final homeData = await _getTeamDataFromFootballApi(homeTeam);
+        if (homeData['found']) foundCount++;
         
-        // İkinci takım için de biraz bekle
-        await Future.delayed(const Duration(milliseconds: 600));
-        final awayStats = await _getTeamStatsWithFallback(awayTeam);
+        await Future.delayed(const Duration(milliseconds: 800));
+        
+        final awayData = await _getTeamDataFromFootballApi(awayTeam);
+        if (awayData['found']) foundCount++;
 
         matchesWithStats.add({
           'homeTeam': homeTeam,
           'awayTeam': awayTeam,
-          'homeStats': homeStats,
-          'awayStats': awayStats,
+          'userPrediction': userPrediction,
+          'homeData': homeData,
+          'awayData': awayData,
         });
+
+        print('  Maç ${i + 1}: ${homeData['found'] ? '✅' : '❌'} $homeTeam vs ${awayData['found'] ? '✅' : '❌'} $awayTeam');
       }
 
-      // 2. TEK BİR GEMINI İSTEĞİNDE TÜM MAÇLARI ANALİZ ET
+      print('📊 Football API: $foundCount/${matches.length * 2} takım bulundu');
+
+      // 2. Google Search Prompt Oluştur
       setState(() {
-        _statusMessage = 'AI analizi yapılıyor (tüm maçlar)...';
+        _statusMessage = 'Google Search ile güncel bilgiler araştırılıyor...';
       });
 
-      await Future.delayed(const Duration(seconds: 2)); // Rate limit için bekleme
+      await Future.delayed(const Duration(seconds: 2)); // Rate limit
 
-      final batchPrompt = _createBatchAnalysisPrompt(matchesWithStats);
-      final batchResponse = await _retryGeminiRequest(() => 
-        _geminiService.analyzeText(batchPrompt)
+      final prompt = _buildGoogleSearchPrompt(matchesWithStats);
+      
+      // 3. Gemini Google Search ile analiz et
+      final batchResponse = await _retryGeminiRequest(
+        () => _geminiService.analyzeWithGoogleSearch(prompt),
+        maxRetries: 3,
       );
 
-      // 3. Yanıtı parse et
+      // 4. Yanıtı parse et
       final results = _parseBatchAnalysisResponse(batchResponse, matchesWithStats);
       
       setState(() {
         _analysisResults = results;
       });
 
-      // 4. Firestore'a kaydet
+      // 5. Firestore'a kaydet
       await _saveBatchResults(results);
 
     } catch (e) {
@@ -154,127 +167,115 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  /// Football API'den istatistik çek (hata durumunda fallback)
-  Future<Map<String, dynamic>> _getTeamStatsWithFallback(String teamName) async {
+  /// Football API'den takım verisi al
+  Future<Map<String, dynamic>> _getTeamDataFromFootballApi(String teamName) async {
     try {
-      var teamData = await _footballApi.searchTeam(teamName);
+      final teamInfo = await _footballApi.searchTeam(teamName);
       
-      // İlk denemede bulunamadıysa, Gemini ile normalize et
-      if (teamData == null) {
-        print('🔄 Gemini ile normalize ediliyor: $teamName');
-        final normalizedName = await _normalizeTeamNameWithGemini(teamName);
-        
-        if (normalizedName != null && normalizedName != teamName) {
-          print('  ➡️ Normalize edildi: $teamName -> $normalizedName');
-          teamData = await _footballApi.searchTeam(normalizedName);
-        }
-      }
-      
-      if (teamData != null) {
-        final teamId = teamData['team']?['id'];
-        if (teamId != null) {
-          final stats = await _footballApi.getTeamStats(teamId, 2024);
-          if (stats != null) {
-            return {
-              'found': true,
-              'name': teamData['team']?['name'] ?? teamName,
-              'stats': stats,
-            };
-          }
-        }
+      if (teamInfo == null) {
+        return {'found': false, 'name': teamName};
       }
 
-      // API'de bulunamadı
-      print('! Takım API\'de bulunamadı: $teamName');
+      final teamId = teamInfo['team']?['id'];
+      final stats = await _footballApi.getTeamStats(teamId);
+      final lastMatches = await _footballApi.getLastMatches(teamId);
+
       return {
-        'found': false,
-        'name': teamName,
-        'stats': null,
+        'found': true,
+        'name': teamInfo['team']?['name'] ?? teamName,
+        'stats': stats,
+        'lastMatches': lastMatches,
       };
     } catch (e) {
-      print('❌ Takım istatistiği hatası ($teamName): $e');
-      return {
-        'found': false,
-        'name': teamName,
-        'stats': null,
-      };
+      return {'found': false, 'name': teamName};
     }
   }
 
-  /// Gemini ile takım ismini normalize et
-  Future<String?> _normalizeTeamNameWithGemini(String teamName) async {
-    try {
-      final prompt = '''Takım ismi: "$teamName"
-
-Bu takımın Football-API.com'da bulunabilecek resmi İngilizce ismini ver.
-
-Örnekler:
-- "Espanyol II" → "Espanyol B"
-- "Valencia M." → "Valencia Mestalla"
-- "UD Poblense" → "Poblense"
-- "CE Andratx" → "Andratx"
-
-Sadece takım ismini yaz, başka bir şey yazma.''';
-
-      final response = await _geminiService.analyzeText(prompt);
-      final normalized = response.trim().replaceAll('"', '');
-      
-      return normalized.isNotEmpty ? normalized : null;
-    } catch (e) {
-      print('❌ Gemini normalize hatası: $e');
-      return null;
-    }
-  }
-
-  /// Tüm maçlar için tek prompt oluştur
-  String _createBatchAnalysisPrompt(List<Map<String, dynamic>> matches) {
-    final matchesInfo = matches.asMap().entries.map((entry) {
+  /// Google Search Prompt Oluştur
+  String _buildGoogleSearchPrompt(List<Map<String, dynamic>> matchesWithStats) {
+    final matchesInfo = matchesWithStats.asMap().entries.map((entry) {
       final index = entry.key + 1;
       final match = entry.value;
+      final homeData = match['homeData'];
+      final awayData = match['awayData'];
       
       return '''
-MAÇ $index:
-- Ev Sahibi: ${match['homeTeam']} ${_formatStats(match['homeStats'])}
-- Deplasman: ${match['awayTeam']} ${_formatStats(match['awayStats'])}
+MAÇ $index: ${match['homeTeam']} vs ${match['awayTeam']}
+- Kullanıcı Tahmini: ${match['userPrediction']}
+
+EV SAHİBİ: ${homeData['name']}
+${homeData['found'] ? '✅ Football API Verisi Var' : '❌ Football API Verisi Yok - Google Search kullan'}
+${_formatTeamStats(homeData)}
+
+DEPLASMAN: ${awayData['name']}
+${awayData['found'] ? '✅ Football API Verisi Var' : '❌ Football API Verisi Yok - Google Search kullan'}
+${_formatTeamStats(awayData)}
 ''';
-    }).join('\n');
+    }).join('\n---\n');
 
     return '''
-Sen profesyonel bir futbol analistisin. Aşağıdaki ${matches.length} maçı analiz et ve her biri için tahmin ver.
+Sen profesyonel futbol analistisin.
 
+🎯 GOOGLE SEARCH KULLAN: Her maç için güncel bilgileri araştır:
+- Sakatlıklar ve cezalı oyuncular
+- Son haberler ve transfer gelişmeleri
+- Takım formu ve morali
+- Kafa kafaya geçmiş
+- Lig sıralaması
+
+MAÇLAR:
 $matchesInfo
 
-Her maç için şu JSON formatında yanıt ver:
+GÖREV:
+1. Football API verisi varsa öncelikle onu kullan
+2. Veri yoksa veya eksikse Google Search ile araştır
+3. Profesyonel tahmin yap
+
+JSON ÇIKTI:
 {
   "analyses": [
     {
       "matchIndex": 1,
       "homeTeam": "Takım Adı",
       "awayTeam": "Takım Adı",
-      "aiPrediction": "X",
-      "confidence": 75,
-      "reasoning": "Net ve kısa analiz nedeni (max 100 karakter)"
+      "aiPrediction": "1",
+      "confidence": 85,
+      "reasoning": "Kısa analiz (max 120 karakter)",
+      "dataSource": "football-api + google-search"
     }
   ]
 }
 
 KURALLAR:
-- aiPrediction: "1" (Ev Sahibi Kazanır), "X" (Beraberlik), veya "2" (Deplasman Kazanır)
-- confidence: 0-100 arası güven seviyesi
-- reasoning: Kısa ve net neden açıklaması (maksimum 100 karakter)
-- Sadece JSON döndür, başka açıklama ekleme
+- aiPrediction: "1" (Ev Sahibi), "X" (Beraberlik), "2" (Deplasman)
+- confidence: 0-100
+- dataSource: "football-api", "google-search", veya "both"
+- Sadece JSON döndür
 ''';
   }
 
-  String _formatStats(Map<String, dynamic> statsData) {
-    if (statsData['found'] != true) {
-      return '(İstatistik yok)';
+  String _formatTeamStats(Map<String, dynamic> teamData) {
+    if (!teamData['found']) {
+      return '- Veri yok (Google Search kullan)';
+    }
+
+    final stats = teamData['stats'];
+    final lastMatches = teamData['lastMatches'] as List?;
+
+    String result = '';
+    
+    if (stats != null && stats['form'] != null) {
+      result += '- Form: ${stats['form']}\n';
     }
     
-    final stats = statsData['stats'];
-    if (stats == null) return '(İstatistik yok)';
+    if (lastMatches != null && lastMatches.isNotEmpty) {
+      final results = lastMatches.take(5).map((m) {
+        return '${m['goals']?['home']}-${m['goals']?['away']}';
+      }).join(', ');
+      result += '- Son 5: $results';
+    }
 
-    return '''(Form: ${stats['form'] ?? '?'}, Gol Ort: ${stats['goals']?['for']?['average']?['total'] ?? '?'})''';
+    return result.isNotEmpty ? result : '- Kısmi veri var';
   }
 
   /// Batch yanıtını parse et
@@ -304,9 +305,11 @@ KURALLAR:
           'matchIndex': index + 1,
           'homeTeam': match['homeTeam'],
           'awayTeam': match['awayTeam'],
+          'userPrediction': match['userPrediction'] ?? '?',
           'aiPrediction': '?',
           'confidence': 0,
           'reasoning': 'Analiz yapılamadı - Teknik hata',
+          'dataSource': 'fallback',
         };
       }).toList();
     }
