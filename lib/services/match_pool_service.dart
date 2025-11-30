@@ -17,65 +17,64 @@ class MatchPoolService {
   String get _apiKey => _remoteConfig.footballApiKey;
   final String _baseUrl = 'https://v3.football.api-sports.io';
 
-  /// 🔥 FIREBASE HAVUZUNU GÜNCELLE (24 saatlik maçlar)
+  /// 🔥 FIREBASE HAVUZUNU GÜNCELLE (Bugün + Yarın TÜM MAÇLAR)
   Future<void> updateMatchPool() async {
     try {
-      print('🔄 Maç havuzu güncelleniyor...');
+      print('🔄 Maç havuzu güncelleniyor (TÜM MAÇLAR)...');
       
       final now = DateTime.now();
-      final tomorrow = now.add(const Duration(hours: 24));
+      final tomorrow = now.add(const Duration(days: 1));
       
-      // Türkiye Süper Lig + Büyük Avrupa ligleri
-      final leagueIds = [
-        203, // Türkiye Süper Lig
-        39,  // İngiltere Premier League
-        140, // İspanya La Liga
-        78,  // Almanya Bundesliga
-        135, // İtalya Serie A
-        61,  // Fransa Ligue 1
-      ];
-
       int totalMatches = 0;
+      Set<int> uniqueLeagues = {};
       
-      for (final leagueId in leagueIds) {
-        await Future.delayed(const Duration(milliseconds: 500)); // Rate limit koruması
-        
-        final matches = await _fetchFixturesForLeague(
-          leagueId,
-          now,
-          tomorrow,
-        );
-        
-        if (matches.isNotEmpty) {
-          await _saveMatchesToFirebase(matches);
-          totalMatches += matches.length;
-          print('✅ Lig $leagueId: ${matches.length} maç eklendi');
+      // BUGÜN'ÜN MAÇLARINI ÇEK
+      print('📥 Bugün oynanan maçlar çekiliyor...');
+      final todayMatches = await _fetchAllFixturesForDate(now);
+      if (todayMatches.isNotEmpty) {
+        await _saveMatchesToFirebase(todayMatches);
+        totalMatches += todayMatches.length;
+        for (var match in todayMatches) {
+          uniqueLeagues.add(match.leagueId);
         }
+        print('✅ Bugün: ${todayMatches.length} maç eklendi');
+      }
+      
+      // Rate limit koruması
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // YARIN'IN MAÇLARINI ÇEK
+      print('📥 Yarın oynanan maçlar çekiliyor...');
+      final tomorrowMatches = await _fetchAllFixturesForDate(tomorrow);
+      if (tomorrowMatches.isNotEmpty) {
+        await _saveMatchesToFirebase(tomorrowMatches);
+        totalMatches += tomorrowMatches.length;
+        for (var match in tomorrowMatches) {
+          uniqueLeagues.add(match.leagueId);
+        }
+        print('✅ Yarın: ${tomorrowMatches.length} maç eklendi');
       }
 
       // Metadata güncelle
-      await _updatePoolMetadata(totalMatches, leagueIds);
+      await _updatePoolMetadata(totalMatches, uniqueLeagues.toList());
       
-      print('🎉 Havuz güncellendi: $totalMatches maç');
+      print('🎉 Havuz güncellendi: $totalMatches maç (${uniqueLeagues.length} farklı lig)');
     } catch (e) {
       print('❌ Havuz güncelleme hatası: $e');
       rethrow;
     }
   }
 
-  /// Belirli bir lig için 24 saatlik maçları çek
-  Future<List<MatchPoolModel>> _fetchFixturesForLeague(
-    int leagueId,
-    DateTime from,
-    DateTime to,
-  ) async {
+  /// Belirli bir tarihte oynanan TÜM maçları çek (tüm ligler)
+  Future<List<MatchPoolModel>> _fetchAllFixturesForDate(DateTime date) async {
     try {
-      final fromStr = _formatDate(from);
-      final toStr = _formatDate(to);
+      final dateStr = _formatDate(date);
       
       final url = Uri.parse(
-        '$_baseUrl/fixtures?league=$leagueId&from=$fromStr&to=$toStr&season=${from.year}',
+        '$_baseUrl/fixtures?date=$dateStr',
       );
+
+      print('📡 API Request: /fixtures?date=$dateStr');
 
       final response = await http.get(url, headers: {
         'x-rapidapi-host': 'v3.football.api-sports.io',
@@ -86,24 +85,29 @@ class MatchPoolService {
         final data = jsonDecode(response.body);
         final fixtures = data['response'] as List? ?? [];
         
+        print('📊 API Response: ${fixtures.length} maç bulundu');
+        
         List<MatchPoolModel> matches = [];
         
+        // Her maç için stats ve h2h çekme (opsiyonel - çok request olabilir)
+        // İlk versiyonda sadece temel bilgileri kaydedelim
         for (var fixture in fixtures) {
-          // Her maç için stats çek (rate limit dikkat)
-          await Future.delayed(const Duration(milliseconds: 400));
-          
           final homeTeamId = fixture['teams']['home']['id'];
           final awayTeamId = fixture['teams']['away']['id'];
+          final leagueId = fixture['league']['id'];
           
-          // Stats çek
-          final homeStats = await _footballApi.getTeamStats(homeTeamId, leagueId);
-          await Future.delayed(const Duration(milliseconds: 400));
+          // Rate limit koruması
+          await Future.delayed(const Duration(milliseconds: 200));
           
-          final awayStats = await _footballApi.getTeamStats(awayTeamId, leagueId);
-          await Future.delayed(const Duration(milliseconds: 400));
+          // Stats çek (opsiyonel)
+          final homeStats = await _footballApi.getTeamStats(homeTeamId, leagueId).catchError((_) => null);
+          await Future.delayed(const Duration(milliseconds: 200));
           
-          // H2H çek
-          final h2h = await _footballApi.getH2H(homeTeamId, awayTeamId);
+          final awayStats = await _footballApi.getTeamStats(awayTeamId, leagueId).catchError((_) => null);
+          await Future.delayed(const Duration(milliseconds: 200));
+          
+          // H2H çek (opsiyonel)
+          final h2h = await _footballApi.getH2H(homeTeamId, awayTeamId).catchError((_) => []);
           
           final match = MatchPoolModel(
             fixtureId: fixture['fixture']['id'],
@@ -127,11 +131,12 @@ class MatchPoolService {
         }
         
         return matches;
+      } else {
+        print('❌ API Error: Status ${response.statusCode}');
+        return [];
       }
-      
-      return [];
     } catch (e) {
-      print('❌ Fixtures fetch error (League $leagueId): $e');
+      print('❌ Fixtures fetch error ($dateStr): $e');
       return [];
     }
   }
@@ -157,12 +162,22 @@ class MatchPoolService {
   /// Pool metadata güncelle
   Future<void> _updatePoolMetadata(int totalMatches, List<int> leagues) async {
     try {
-      await _database.child('poolMetadata').set({
-        'lastUpdate': DateTime.now().millisecondsSinceEpoch,
+      final now = DateTime.now();
+      final nextUpdate = now.add(const Duration(hours: 6)); // 6 saatte bir güncelle
+      
+      await _database.child('poolMetadata').update({
+        'lastUpdate': now.millisecondsSinceEpoch,
         'totalMatches': totalMatches,
         'leagues': leagues,
-        'nextUpdate': DateTime.now().add(const Duration(hours: 6)).millisecondsSinceEpoch,
+        'nextUpdate': nextUpdate.millisecondsSinceEpoch,
+        'lastUpdateFormatted': '${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
+        'nextUpdateFormatted': '${nextUpdate.day}/${nextUpdate.month}/${nextUpdate.year} ${nextUpdate.hour}:${nextUpdate.minute.toString().padLeft(2, '0')}',
       });
+      
+      print('📊 Metadata güncellendi:');
+      print('  - Toplam maç: $totalMatches');
+      print('  - Ligler: ${leagues.length}');
+      print('  - Sonraki güncelleme: ${nextUpdate.hour}:${nextUpdate.minute.toString().padLeft(2, '0')}');
     } catch (e) {
       print('❌ Metadata güncelleme hatası: $e');
     }

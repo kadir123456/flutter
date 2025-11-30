@@ -63,7 +63,7 @@ exports.updateMatchPoolManual = functions.https
     });
 
 /**
- * Match Pool güncelleme mantığı
+ * Match Pool güncelleme mantığı - TÜM MAÇLAR
  */
 async function updateMatchPoolLogic() {
   const db = admin.database();
@@ -80,99 +80,118 @@ async function updateMatchPoolLogic() {
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // Ligler
-  const leagueIds = [
-    203, // Türkiye Süper Lig
-    39, // İngiltere Premier League
-    140, // İspanya La Liga
-    78, // Almanya Bundesliga
-    135, // İtalya Serie A
-    61, // Fransa Ligue 1
-  ];
-
   let totalMatches = 0;
+  const uniqueLeagues = new Set();
 
-  for (const leagueId of leagueIds) {
-    functions.logger.info(`📥 Lig ${leagueId} maçları çekiliyor...`);
+  // BUGÜN'ÜN TÜM MAÇLARINI ÇEK
+  functions.logger.info("📥 Bugün oynanan tüm maçlar çekiliyor...");
+  const todayMatches = await fetchAllFixturesForDate(
+      apiKey,
+      formatDate(now),
+  );
 
-    // Rate limit koruması
-    await sleep(500);
-
-    const matches = await fetchFixturesForLeague(
-        apiKey,
-        leagueId,
-        formatDate(now),
-        formatDate(tomorrow),
-    );
-
-    if (matches.length > 0) {
-      // Firebase'e kaydet
-      for (const match of matches) {
-        const date = match.date;
-        const fixtureId = match.fixtureId.toString();
-
-        await db.ref(`matchPool/${date}/${fixtureId}`).set(match);
-      }
-
-      totalMatches += matches.length;
-      functions.logger.info(`✅ Lig ${leagueId}: ${matches.length} maç eklendi`);
+  if (todayMatches.length > 0) {
+    for (const match of todayMatches) {
+      const date = match.date;
+      const fixtureId = match.fixtureId.toString();
+      await db.ref(`matchPool/${date}/${fixtureId}`).set(match);
+      uniqueLeagues.add(match.leagueId);
     }
+    totalMatches += todayMatches.length;
+    functions.logger.info(`✅ Bugün: ${todayMatches.length} maç eklendi`);
+  }
+
+  // Rate limit koruması
+  await sleep(500);
+
+  // YARIN'IN TÜM MAÇLARINI ÇEK
+  functions.logger.info("📥 Yarın oynanan tüm maçlar çekiliyor...");
+  const tomorrowMatches = await fetchAllFixturesForDate(
+      apiKey,
+      formatDate(tomorrow),
+  );
+
+  if (tomorrowMatches.length > 0) {
+    for (const match of tomorrowMatches) {
+      const date = match.date;
+      const fixtureId = match.fixtureId.toString();
+      await db.ref(`matchPool/${date}/${fixtureId}`).set(match);
+      uniqueLeagues.add(match.leagueId);
+    }
+    totalMatches += tomorrowMatches.length;
+    functions.logger.info(`✅ Yarın: ${tomorrowMatches.length} maç eklendi`);
   }
 
   // Metadata güncelle
-  await db.ref("poolMetadata").set({
+  const nextUpdate = now.getTime() + (6 * 60 * 60 * 1000); // 6 saat sonra
+  await db.ref("poolMetadata").update({
     lastUpdate: admin.database.ServerValue.TIMESTAMP,
     totalMatches: totalMatches,
-    leagues: leagueIds,
-    nextUpdate: now.getTime() + (12 * 60 * 60 * 1000), // 12 saat sonra
+    leagues: Array.from(uniqueLeagues),
+    leagueCount: uniqueLeagues.size,
+    nextUpdate: nextUpdate,
   });
 
   // Eski maçları temizle (3 saatten eski)
   await cleanOldMatches(db);
 
-  functions.logger.info(`🎉 Toplam ${totalMatches} maç güncellendi`);
+  functions.logger.info(
+      `🎉 Toplam ${totalMatches} maç güncellendi (${uniqueLeagues.size} farklı lig)`,
+  );
 
   return {
     totalMatches,
-    leagues: leagueIds.length,
+    leagues: uniqueLeagues.size,
     timestamp: now.toISOString(),
   };
 }
 
 /**
- * Belirli bir lig için maçları çek
+ * Belirli bir tarihteki TÜM maçları çek (tüm ligler)
  * @param {string} apiKey - Football API key
- * @param {number} leagueId - League ID
- * @param {string} fromDate - Start date
- * @param {string} toDate - End date
+ * @param {string} date - Date (YYYY-MM-DD)
  * @return {Promise<Array>} Matches array
  */
-async function fetchFixturesForLeague(apiKey, leagueId, fromDate, toDate) {
-  const season = new Date().getFullYear();
-  const url = `https://v3.football.api-sports.io/fixtures?league=${leagueId}&from=${fromDate}&to=${toDate}&season=${season}`;
+async function fetchAllFixturesForDate(apiKey, date) {
+  const url = `https://v3.football.api-sports.io/fixtures?date=${date}`;
 
   try {
+    functions.logger.info(`📡 API Request: /fixtures?date=${date}`);
+
     const data = await makeHttpsRequest(url, apiKey);
     const fixtures = data.response || [];
+
+    functions.logger.info(`📊 API Response: ${fixtures.length} maç bulundu`);
 
     const matches = [];
 
     for (const fixture of fixtures) {
-      // Her maç için stats çek (rate limit dikkat!)
-      await sleep(400);
+      // Rate limit koruması
+      await sleep(200);
 
       const homeTeamId = fixture.teams.home.id;
       const awayTeamId = fixture.teams.away.id;
+      const leagueId = fixture.league.id;
 
-      // Stats çek
-      const homeStats = await fetchTeamStats(apiKey, homeTeamId, leagueId);
-      await sleep(400);
+      // Stats çek (opsiyonel - hata olsa bile devam et)
+      let homeStats = null;
+      let awayStats = null;
+      let h2h = [];
 
-      const awayStats = await fetchTeamStats(apiKey, awayTeamId, leagueId);
-      await sleep(400);
+      try {
+        homeStats = await fetchTeamStats(apiKey, homeTeamId, leagueId);
+        await sleep(200);
 
-      // H2H çek
-      const h2h = await fetchH2H(apiKey, homeTeamId, awayTeamId);
+        awayStats = await fetchTeamStats(apiKey, awayTeamId, leagueId);
+        await sleep(200);
+
+        h2h = await fetchH2H(apiKey, homeTeamId, awayTeamId);
+      } catch (statsError) {
+        functions.logger.warn(
+            `⚠️ Stats alınamadı (Fixture ${fixture.fixture.id}):`,
+            statsError.message,
+        );
+      }
 
       const match = {
         fixtureId: fixture.fixture.id,
@@ -197,7 +216,7 @@ async function fetchFixturesForLeague(apiKey, leagueId, fromDate, toDate) {
 
     return matches;
   } catch (error) {
-    functions.logger.error(`❌ Lig ${leagueId} çekme hatası:`, error.message);
+    functions.logger.error(`❌ Tarih ${date} çekme hatası:`, error.message);
     return [];
   }
 }

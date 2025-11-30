@@ -1,9 +1,11 @@
 import 'package:firebase_database/firebase_database.dart';
 import './match_pool_service.dart';
 
-/// Uygulama başlangıç servisi
-/// - Match Pool'u akıllıca günceller
-/// - Son güncelleme zamanına göre karar verir
+/// Uygulama başlangıç servisi - SADECE OKUMA MODU
+/// - Match Pool durumunu kontrol eder
+/// - KULLANICILAR GÜNCELLEME YAPMAZ
+/// - Güncelleme: External Cron + Cloud Function tarafından yapılır
+/// - Firebase FREE plan ile çalışır
 class AppStartupService {
   static final AppStartupService _instance = AppStartupService._internal();
   factory AppStartupService() => _instance;
@@ -24,20 +26,29 @@ class AppStartupService {
     try {
       print('🚀 App Startup başlatılıyor...');
 
-      // 1. Pool metadata kontrolü
-      final shouldUpdate = await _shouldUpdatePool();
-
-      if (shouldUpdate) {
-        print('🔥 Match Pool güncelleme gerekiyor...');
+      // 1. Pool durumunu kontrol et (SADECE OKUMA)
+      final poolStatus = await _checkPoolStatus();
+      
+      if (poolStatus['exists']) {
+        final hoursSinceUpdate = poolStatus['hoursSinceUpdate'] ?? 0;
+        final totalMatches = poolStatus['totalMatches'] ?? 0;
         
-        // Background'da güncelle (UI bloklamadan)
-        _updatePoolInBackground();
+        print('✅ Match Pool mevcut:');
+        print('   - Toplam maç: $totalMatches');
+        print('   - Son güncelleme: $hoursSinceUpdate saat önce');
+        
+        if (hoursSinceUpdate > 6) {
+          print('⚠️ Pool eskimiş (6+ saat) - Cron job güncelleme yapacak');
+        } else {
+          print('✅ Pool güncel ve kullanıma hazır');
+        }
       } else {
-        print('✅ Match Pool güncel - Güncelleme atlandı');
+        print('⚠️ Match Pool henüz oluşturulmamış');
+        print('💡 Cron job ilk güncellemeyi yapacak');
       }
 
       _isInitialized = true;
-      print('✅ App Startup tamamlandı');
+      print('✅ App Startup tamamlandı (Read-only mode)');
     } catch (e) {
       print('❌ App Startup hatası: $e');
       // Hata olsa bile uygulama açılmalı
@@ -45,86 +56,49 @@ class AppStartupService {
     }
   }
 
-  /// Pool güncellemesi gerekli mi?
-  Future<bool> _shouldUpdatePool() async {
+  /// Pool durumunu kontrol et (SADECE OKUMA)
+  Future<Map<String, dynamic>> _checkPoolStatus() async {
     try {
       final metadataSnapshot = await _database.child('poolMetadata').get();
 
       if (!metadataSnapshot.exists) {
-        print('📭 Pool metadata yok - İlk güncelleme gerekiyor');
-        return true;
+        return {
+          'exists': false,
+          'message': 'Pool henüz oluşturulmamış',
+        };
       }
 
       final metadata = metadataSnapshot.value as Map<dynamic, dynamic>;
       final lastUpdate = metadata['lastUpdate'] as int?;
+      final totalMatches = metadata['totalMatches'] as int? ?? 0;
       final nextUpdate = metadata['nextUpdate'] as int?;
 
-      if (lastUpdate == null) {
-        print('📭 lastUpdate yok - Güncelleme gerekiyor');
-        return true;
-      }
-
       final now = DateTime.now().millisecondsSinceEpoch;
-      
-      // nextUpdate varsa ve geçmişse güncelle
-      if (nextUpdate != null && now >= nextUpdate) {
-        print('⏰ nextUpdate zamanı geldi - Güncelleme gerekiyor');
-        return true;
-      }
+      final hoursSinceUpdate = lastUpdate != null 
+          ? ((now - lastUpdate) / (1000 * 60 * 60)).floor() 
+          : 0;
 
-      // Son güncelleme 12 saatten eskiyse güncelle
-      final twelveHoursAgo = now - (12 * 60 * 60 * 1000);
-      if (lastUpdate < twelveHoursAgo) {
-        print('⏰ 12 saatten eski - Güncelleme gerekiyor');
-        return true;
-      }
-
-      // Pool'da hiç maç yoksa güncelle
-      final poolSnapshot = await _database.child('matchPool').get();
-      if (!poolSnapshot.exists) {
-        print('📭 Pool boş - Güncelleme gerekiyor');
-        return true;
-      }
-
-      // Her şey tamam, güncelleme gereksiz
-      final hoursSinceUpdate = ((now - lastUpdate) / (1000 * 60 * 60)).floor();
-      print('✅ Son güncelleme: $hoursSinceUpdate saat önce');
-      return false;
+      return {
+        'exists': true,
+        'totalMatches': totalMatches,
+        'lastUpdate': lastUpdate,
+        'nextUpdate': nextUpdate,
+        'hoursSinceUpdate': hoursSinceUpdate,
+        'isStale': hoursSinceUpdate > 6,
+      };
     } catch (e) {
-      print('❌ Pool kontrol hatası: $e');
-      return false; // Hata durumunda güncelleme yapma
+      print('❌ Pool status kontrol hatası: $e');
+      return {
+        'exists': false,
+        'error': e.toString(),
+      };
     }
   }
 
-  /// Background'da pool güncelle (UI bloklamadan)
-  void _updatePoolInBackground() {
-    // Fire and forget - UI bloklamıyor
-    Future.microtask(() async {
-      try {
-        print('🔄 Background pool güncelleme başladı...');
-        
-        await _matchPool.updateMatchPool();
-        
-        print('✅ Background pool güncelleme tamamlandı');
-      } catch (e) {
-        print('❌ Background pool güncelleme hatası: $e');
-      }
-    });
-  }
-
-  /// Manuel pool güncelleme (Kullanıcı tetikler)
-  Future<bool> forceUpdatePool() async {
-    try {
-      print('🔄 Manuel pool güncelleme başlatıldı...');
-      
-      await _matchPool.updateMatchPool();
-      
-      print('✅ Manuel pool güncelleme başarılı');
-      return true;
-    } catch (e) {
-      print('❌ Manuel pool güncelleme hatası: $e');
-      return false;
-    }
+  /// Timestamp'i okunabilir formata çevir
+  String _formatTimestamp(int timestamp) {
+    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    return '${date.day}/${date.month} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 
   /// Pool durumunu kontrol et
@@ -143,6 +117,7 @@ class AppStartupService {
       final lastUpdate = metadata['lastUpdate'] as int?;
       final totalMatches = metadata['totalMatches'] as int? ?? 0;
       final leagues = metadata['leagues'] as List<dynamic>? ?? [];
+      final nextUpdate = metadata['nextUpdate'] as int?;
 
       final now = DateTime.now().millisecondsSinceEpoch;
       final hoursSinceUpdate = lastUpdate != null 
@@ -154,8 +129,11 @@ class AppStartupService {
         'totalMatches': totalMatches,
         'leagues': leagues.length,
         'lastUpdate': lastUpdate,
+        'nextUpdate': nextUpdate,
         'hoursSinceUpdate': hoursSinceUpdate,
-        'isStale': hoursSinceUpdate > 12,
+        'isStale': hoursSinceUpdate > 6, // 6 saatten eski ise stale
+        'lastUpdateFormatted': lastUpdate != null ? _formatTimestamp(lastUpdate) : 'Bilinmiyor',
+        'nextUpdateFormatted': nextUpdate != null ? _formatTimestamp(nextUpdate) : 'Bilinmiyor',
       };
     } catch (e) {
       print('❌ Pool status hatası: $e');
