@@ -124,7 +124,7 @@ Sadece JSON döndür, başka açıklama yazma.'''
     }
   }
 
-  /// ⭐ YENİ METOD: Google Search ile analiz
+  /// ⭐ YENİ METOD: Google Search ile analiz (OPSIYONEL)
   Future<String> analyzeWithGoogleSearch(String prompt) async {
     try {
       print('🔍 Google Search ile analiz başlatılıyor...');
@@ -170,6 +170,47 @@ Sadece JSON döndür, başka açıklama yazma.'''
       }
     } catch (e) {
       print('❌ Gemini Google Search Error: $e');
+      rethrow;
+    }
+  }
+
+  /// ⭐ YENİ: Opsiyonel Google Search ile analiz
+  Future<String> analyzeWithOptionalSearch(String prompt, {bool useSearch = false}) async {
+    try {
+      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-exp:generateContent?key=$_apiKey');
+
+      final body = jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
+        'generationConfig': {
+          'temperature': 0.4,
+          'maxOutputTokens': 8192,
+        },
+        if (useSearch) // ✅ Sadece gerekirse ekle
+          'tools': [
+            {'googleSearch': {}}
+          ],
+      });
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+      }
+
+      throw Exception('Gemini error: ${response.statusCode}');
+    } catch (e) {
+      print('❌ Gemini Error: $e');
       rethrow;
     }
   }

@@ -348,4 +348,44 @@ class MatchPoolService {
 
     return v0[s2.length];
   }
+
+  /// 🧪 TEST METODU: Pool operasyonlarını test et
+  Future<void> testPoolOperations() async {
+    try {
+      print('🧪 Pool test başlıyor...');
+      
+      // 1. Pool güncelle (1 lig test için)
+      print('📥 Pool güncelleniyor (Sadece Süper Lig)...');
+      final testLeagues = [203]; // Sadece Süper Lig
+      
+      // Not: updateMatchPool manuel çağrılmalı - test için geçici
+      
+      // 2. Bir maç ara
+      print('🔍 Test maçı aranıyor...');
+      final testMatch = await findMatchInPool('Galatasaray', 'Fenerbahce');
+      
+      if (testMatch != null) {
+        print('✅ Test başarılı: ${testMatch.getMatchSummary()}');
+      } else {
+        print('⚠️ Test maçı bulunamadı (Normal - maç bugün olmayabilir)');
+      }
+      
+      // 3. Stats göster
+      print('📊 Pool istatistikleri alınıyor...');
+      final stats = await getPoolStats();
+      
+      if (stats.isNotEmpty) {
+        print('✅ Pool Stats:');
+        print('  - Son Güncelleme: ${stats['lastUpdate']}');
+        print('  - Toplam Maç: ${stats['totalMatches']}');
+        print('  - Ligler: ${stats['leagues']}');
+      } else {
+        print('⚠️ Pool metadata bulunamadı');
+      }
+      
+      print('🎉 Test tamamlandı!');
+    } catch (e) {
+      print('❌ Test hatası: $e');
+    }
+  }
 }

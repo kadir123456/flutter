@@ -92,15 +92,15 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  /// ⭐ YENİ: Firebase Havuzu + Google Search ile analiz
+  /// ⭐ YENİ: Firebase Pool Öncelikli Sistem (Google Search Opsiyonel)
   Future<void> _analyzeAllMatchesInBatch(List<Map<String, dynamic>> matches) async {
     try {
       setState(() {
         _statusMessage = '🔥 Firebase havuzundan veriler alınıyor...';
       });
 
-      // 1. Firebase havuzundan maçları eşleştir
-      List<Map<String, dynamic>> matchesWithStats = [];
+      // 1️⃣ ÖNCELİK: Firebase Pool
+      List<Map<String, dynamic>> matchesWithData = [];
       int poolFoundCount = 0;
       int apiFoundCount = 0;
       
@@ -114,86 +114,74 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           _statusMessage = 'Maç ${i + 1}/${matches.length}: $homeTeam vs $awayTeam';
         });
 
-        // ⭐ ÖNCELİKLE HAVUZDA ARA
+        // 1️⃣ ÖNCELİK: Firebase Pool
         final poolMatch = await _matchPool.findMatchInPool(homeTeam, awayTeam);
         
         if (poolMatch != null) {
-          // ✅ Havuzda bulundu - HIZLI!
+          // ✅ Pool'dan bulundu (EN HIZLI)
           poolFoundCount++;
           
-          matchesWithStats.add({
-            'homeTeam': homeTeam,
-            'awayTeam': awayTeam,
+          matchesWithData.add({
+            'homeTeam': poolMatch.homeTeam,
+            'awayTeam': poolMatch.awayTeam,
             'userPrediction': userPrediction,
-            'homeData': {
-              'found': true,
-              'name': poolMatch.homeTeam,
-              'teamId': poolMatch.homeTeamId,
-              'leagueId': poolMatch.leagueId,
-              'stats': poolMatch.homeStats,
-              'lastMatches': [],
-            },
-            'awayData': {
-              'found': true,
-              'name': poolMatch.awayTeam,
-              'teamId': poolMatch.awayTeamId,
-              'leagueId': poolMatch.leagueId,
-              'stats': poolMatch.awayStats,
-              'lastMatches': [],
-            },
-            'dataSource': 'firebase-pool', // ⭐ Veri kaynağı işaretle
+            'homeStats': poolMatch.homeStats,
+            'awayStats': poolMatch.awayStats,
+            'h2h': poolMatch.h2h,
+            'dataSource': 'firebase-pool',
           });
           
-          print('  Maç ${i + 1}: 🔥 HAVUZDA BULUNDU - $homeTeam vs $awayTeam');
-        } else {
-          // ⚠️ Havuzda yok, fallback: Football API
-          print('  Maç ${i + 1}: ⚠️ Havuzda yok, Football API kullanılıyor...');
-          
-          await Future.delayed(const Duration(milliseconds: 800));
-          final homeData = await _getTeamDataFromFootballApi(homeTeam);
-          if (homeData['found']) apiFoundCount++;
-          
-          await Future.delayed(const Duration(milliseconds: 800));
-          final awayData = await _getTeamDataFromFootballApi(awayTeam);
-          if (awayData['found']) apiFoundCount++;
-          
-          matchesWithStats.add({
-            'homeTeam': homeTeam,
-            'awayTeam': awayTeam,
-            'userPrediction': userPrediction,
-            'homeData': homeData,
-            'awayData': awayData,
-            'dataSource': 'football-api', // ⭐ Veri kaynağı işaretle
-          });
+          print('✅ Maç ${i + 1}: Firebase Pool - $homeTeam vs $awayTeam');
+          continue;
         }
+        
+        // 2️⃣ FALLBACK: Football API (rate limit ile)
+        print('⚠️ Maç ${i + 1}: Havuzda yok, Football API kullanılıyor...');
+        
+        await Future.delayed(const Duration(milliseconds: 800));
+        final homeData = await _getTeamDataFromFootballApi(homeTeam);
+        
+        await Future.delayed(const Duration(milliseconds: 800));
+        final awayData = await _getTeamDataFromFootballApi(awayTeam);
+        
+        if (homeData['found']) apiFoundCount++;
+        if (awayData['found']) apiFoundCount++;
+        
+        matchesWithData.add({
+          'homeTeam': homeTeam,
+          'awayTeam': awayTeam,
+          'userPrediction': userPrediction,
+          'homeData': homeData,
+          'awayData': awayData,
+          'dataSource': 'football-api',
+        });
       }
 
-      print('📊 Firebase Havuz: $poolFoundCount/${matches.length} maç bulundu');
-      print('📊 Football API: $apiFoundCount/${matches.length - poolFoundCount} maç çekildi');
+      print('📊 Firebase Pool: $poolFoundCount/${matches.length} maç bulundu');
+      print('📊 Football API: $apiFoundCount takım verisi çekildi');
 
-      // 2. Google Search Prompt Oluştur
+      // 3️⃣ Gemini ile analiz (Basitleştirilmiş prompt)
       setState(() {
-        _statusMessage = 'Google Search ile güncel bilgiler araştırılıyor...';
+        _statusMessage = 'AI analizi yapılıyor...';
       });
 
-      await Future.delayed(const Duration(seconds: 2)); // Rate limit
+      await Future.delayed(const Duration(seconds: 1));
 
-      final prompt = _buildGoogleSearchPrompt(matchesWithStats);
+      final prompt = _buildSimplePrompt(matchesWithData);
       
-      // 3. Gemini Google Search ile analiz et
       final batchResponse = await _retryGeminiRequest(
-        () => _geminiService.analyzeWithGoogleSearch(prompt),
+        () => _geminiService.analyzeText(prompt), // ✅ Google Search YOK
         maxRetries: 3,
       );
 
-      // 4. Yanıtı parse et
-      final results = _parseBatchAnalysisResponse(batchResponse, matchesWithStats);
+      // 4️⃣ Yanıtı parse et
+      final results = _parseBatchAnalysisResponse(batchResponse, matchesWithData);
       
       setState(() {
         _analysisResults = results;
       });
 
-      // 5. Firestore'a kaydet
+      // 5️⃣ Realtime Database'e kaydet
       await _saveBatchResults(results);
 
     } catch (e) {
@@ -247,47 +235,40 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  /// Google Search Prompt Oluştur
-  String _buildGoogleSearchPrompt(List<Map<String, dynamic>> matchesWithStats) {
-    final matchesInfo = matchesWithStats.asMap().entries.map((entry) {
+  /// ✅ Basitleştirilmiş prompt (Google Search olmadan)
+  String _buildSimplePrompt(List<Map<String, dynamic>> matches) {
+    final matchesInfo = matches.asMap().entries.map((entry) {
       final index = entry.key + 1;
       final match = entry.value;
-      final homeData = match['homeData'];
-      final awayData = match['awayData'];
       
-      return '''
-MAÇ $index: ${match['homeTeam']} vs ${match['awayTeam']}
-- Kullanıcı Tahmini: ${match['userPrediction']}
-
-EV SAHİBİ: ${homeData['name']}
-${homeData['found'] ? '✅ Football API Verisi Var' : '❌ Football API Verisi Yok - Google Search kullan'}
-${_formatTeamStats(homeData)}
-
-DEPLASMAN: ${awayData['name']}
-${awayData['found'] ? '✅ Football API Verisi Var' : '❌ Football API Verisi Yok - Google Search kullan'}
-${_formatTeamStats(awayData)}
-''';
+      String matchInfo = 'MAÇ $index: ${match['homeTeam']} vs ${match['awayTeam']}\n';
+      matchInfo += 'Kullanıcı Tahmini: ${match['userPrediction']}\n';
+      
+      if (match['dataSource'] == 'firebase-pool') {
+        // Firebase Pool'dan gelen veriler
+        final homeStats = match['homeStats'];
+        final awayStats = match['awayStats'];
+        
+        matchInfo += '\nEv Sahibi Form: ${homeStats?['form'] ?? 'Bilinmiyor'}\n';
+        matchInfo += 'Deplasman Form: ${awayStats?['form'] ?? 'Bilinmiyor'}\n';
+      } else {
+        // Football API'den gelen veriler
+        final homeData = match['homeData'];
+        final awayData = match['awayData'];
+        
+        matchInfo += '\n${_formatTeamStats(homeData)}\n';
+        matchInfo += '${_formatTeamStats(awayData)}\n';
+      }
+      
+      return matchInfo;
     }).join('\n---\n');
 
     return '''
-Sen profesyonel futbol analistisin.
+Profesyonel futbol analisti olarak analiz yap.
 
-🎯 GOOGLE SEARCH KULLAN: Her maç için güncel bilgileri araştır:
-- Sakatlıklar ve cezalı oyuncular
-- Son haberler ve transfer gelişmeleri
-- Takım formu ve morali
-- Kafa kafaya geçmiş
-- Lig sıralaması
-
-MAÇLAR:
 $matchesInfo
 
-GÖREV:
-1. Football API verisi varsa öncelikle onu kullan
-2. Veri yoksa veya eksikse Google Search ile araştır
-3. Profesyonel tahmin yap
-
-JSON ÇIKTI:
+JSON formatında yanıt ver:
 {
   "analyses": [
     {
@@ -295,18 +276,18 @@ JSON ÇIKTI:
       "homeTeam": "Takım Adı",
       "awayTeam": "Takım Adı",
       "aiPrediction": "1",
-      "confidence": 85,
-      "reasoning": "Kısa analiz (max 120 karakter)",
-      "dataSource": "football-api + google-search"
+      "confidence": 75,
+      "reasoning": "Kısa analiz (max 100 karakter)"
     }
   ]
 }
 
-KURALLAR:
+Kurallar:
 - aiPrediction: "1" (Ev Sahibi), "X" (Beraberlik), "2" (Deplasman)
-- confidence: 0-100
-- dataSource: "football-api", "google-search", veya "both"
-- Sadece JSON döndür
+- confidence: 0-100 arası
+- reasoning: Maksimum 100 karakter
+
+Sadece JSON döndür.
 ''';
   }
 
