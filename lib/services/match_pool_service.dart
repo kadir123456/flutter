@@ -67,8 +67,9 @@ class MatchPoolService {
 
   /// Belirli bir tarihte oynanan TÜM maçları çek (tüm ligler)
   Future<List<MatchPoolModel>> _fetchAllFixturesForDate(DateTime date) async {
+    final dateStr = _formatDate(date); // ✅ Scope dışına taşındı
+    
     try {
-      final dateStr = _formatDate(date);
       
       final url = Uri.parse(
         '$_baseUrl/fixtures?date=$dateStr',

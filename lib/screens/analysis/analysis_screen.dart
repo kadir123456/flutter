@@ -118,20 +118,60 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         final poolMatch = await _matchPool.findMatchInPool(homeTeam, awayTeam);
         
         if (poolMatch != null) {
-          // ✅ Pool'dan bulundu (EN HIZLI)
+          // ✅ Pool'dan bulundu (Fixture ID belli!)
           poolFoundCount++;
+          
+          // ⭐ YENİ: Stats yoksa API'den çek (ON-DEMAND)
+          var homeStats = poolMatch.homeStats;
+          var awayStats = poolMatch.awayStats;
+          var h2h = poolMatch.h2h ?? [];
+          
+          if (homeStats == null || awayStats == null) {
+            print('📊 Stats yoksa API\'den çekiliyor: ${poolMatch.fixtureId}');
+            
+            setState(() {
+              _statusMessage = 'İstatistikler alınıyor: $homeTeam vs $awayTeam';
+            });
+            
+            // Home Stats
+            await Future.delayed(const Duration(milliseconds: 800));
+            homeStats = await _footballApi.getTeamStats(
+              poolMatch.homeTeamId, 
+              poolMatch.leagueId,
+            );
+            
+            // Away Stats
+            await Future.delayed(const Duration(milliseconds: 800));
+            awayStats = await _footballApi.getTeamStats(
+              poolMatch.awayTeamId, 
+              poolMatch.leagueId,
+            );
+            
+            // H2H
+            await Future.delayed(const Duration(milliseconds: 800));
+            h2h = await _footballApi.getH2H(
+              poolMatch.homeTeamId, 
+              poolMatch.awayTeamId,
+            );
+            
+            print('✅ Stats çekildi: $homeTeam vs $awayTeam');
+          } else {
+            print('✅ Stats zaten mevcut (Firebase Pool): $homeTeam vs $awayTeam');
+          }
           
           matchesWithData.add({
             'homeTeam': poolMatch.homeTeam,
             'awayTeam': poolMatch.awayTeam,
             'userPrediction': userPrediction,
-            'homeStats': poolMatch.homeStats,
-            'awayStats': poolMatch.awayStats,
-            'h2h': poolMatch.h2h,
-            'dataSource': 'firebase-pool',
+            'homeStats': homeStats,
+            'awayStats': awayStats,
+            'h2h': h2h,
+            'fixtureId': poolMatch.fixtureId,
+            'leagueId': poolMatch.leagueId,
+            'dataSource': homeStats != null ? 'firebase-pool-with-stats' : 'firebase-pool',
           });
           
-          print('✅ Maç ${i + 1}: Firebase Pool - $homeTeam vs $awayTeam');
+          print('✅ Maç ${i + 1}: Firebase Pool - $homeTeam vs $awayTeam (Stats: ${homeStats != null ? 'VAR' : 'YOK'})');
           continue;
         }
         
@@ -244,13 +284,29 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       String matchInfo = 'MAÇ $index: ${match['homeTeam']} vs ${match['awayTeam']}\n';
       matchInfo += 'Kullanıcı Tahmini: ${match['userPrediction']}\n';
       
-      if (match['dataSource'] == 'firebase-pool') {
-        // Firebase Pool'dan gelen veriler
+      if (match['dataSource'] == 'firebase-pool-with-stats' || match['dataSource'] == 'firebase-pool') {
+        // Firebase Pool'dan gelen veriler (stats API'den çekilmiş olabilir)
         final homeStats = match['homeStats'];
         final awayStats = match['awayStats'];
+        final h2h = match['h2h'] as List?;
         
-        matchInfo += '\nEv Sahibi Form: ${homeStats?['form'] ?? 'Bilinmiyor'}\n';
-        matchInfo += 'Deplasman Form: ${awayStats?['form'] ?? 'Bilinmiyor'}\n';
+        if (homeStats != null) {
+          matchInfo += '\n📊 Ev Sahibi İstatistikleri:\n';
+          matchInfo += '  Form: ${homeStats['form'] ?? 'Bilinmiyor'}\n';
+          matchInfo += '  Atılan Gol (Ort): ${homeStats['goals']?['for']?['average']?['total'] ?? 'Bilinmiyor'}\n';
+          matchInfo += '  Yenilen Gol (Ort): ${homeStats['goals']?['against']?['average']?['total'] ?? 'Bilinmiyor'}\n';
+        }
+        
+        if (awayStats != null) {
+          matchInfo += '\n📊 Deplasman İstatistikleri:\n';
+          matchInfo += '  Form: ${awayStats['form'] ?? 'Bilinmiyor'}\n';
+          matchInfo += '  Atılan Gol (Ort): ${awayStats['goals']?['for']?['average']?['total'] ?? 'Bilinmiyor'}\n';
+          matchInfo += '  Yenilen Gol (Ort): ${awayStats['goals']?['against']?['average']?['total'] ?? 'Bilinmiyor'}\n';
+        }
+        
+        if (h2h != null && h2h.isNotEmpty) {
+          matchInfo += '\n🔄 Son Karşılaşmalar (H2H): ${h2h.length} maç\n';
+        }
       } else {
         // Football API'den gelen veriler
         final homeData = match['homeData'];
