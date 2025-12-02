@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/remote_config_service.dart';
-import 'services/app_startup_service.dart'; // ✅ YENİ
+import 'services/app_startup_service.dart';
 import 'core/routes/app_router.dart';
 import 'providers/auth_provider.dart';
 import 'providers/bulletin_provider.dart';
@@ -11,23 +11,40 @@ import 'providers/bulletin_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Firebase initialize - Realtime Database kullanımı
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
-  // Remote Config initialize - API anahtarları için
-  final remoteConfig = RemoteConfigService();
-  await remoteConfig.initialize();
-  
-  // Debug modda config değerlerini göster
-  if (const bool.fromEnvironment('dart.vm.product') == false) {
-    remoteConfig.printAllConfigs();
+  // ✅ Firebase initialize - SADECE BİR KEZ
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      print('✅ Firebase başarıyla başlatıldı');
+    } else {
+      print('⚠️ Firebase zaten başlatılmış');
+    }
+  } catch (e) {
+    print('❌ Firebase başlatma hatası: $e');
   }
   
-  // ✅ YENİ: App Startup Service - Match Pool otomatik güncelleme
-  final appStartup = AppStartupService();
-  await appStartup.initialize();
+  // Remote Config initialize
+  try {
+    final remoteConfig = RemoteConfigService();
+    await remoteConfig.initialize();
+    
+    // Debug modda config değerlerini göster
+    if (const bool.fromEnvironment('dart.vm.product') == false) {
+      remoteConfig.printAllConfigs();
+    }
+  } catch (e) {
+    print('❌ Remote Config hatası: $e');
+  }
+  
+  // App Startup Service
+  try {
+    final appStartup = AppStartupService();
+    await appStartup.initialize();
+  } catch (e) {
+    print('❌ App Startup hatası: $e');
+  }
   
   runApp(const MyApp());
 }

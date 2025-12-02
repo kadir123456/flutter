@@ -5,15 +5,6 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
-///
-/// Example:
-/// ```dart
-/// import 'firebase_options.dart';
-/// // ...
-/// await Firebase.initializeApp(
-///   options: DefaultFirebaseOptions.currentPlatform,
-/// );
-/// ```
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -59,7 +50,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCQnHUPj9a6XuLPeF419SrO_GmmjoN_IG8',
-    appId: '1:10498248483:web:06ed48fb91d09e85304696',
+    appId: '1:10498248483:android:XXXXXXXXXXXXXXXX', // ✅ Firebase Console'dan al
     messagingSenderId: '10498248483',
     projectId: 'compelling-weft-470708-n8',
     databaseURL: 'https://compelling-weft-470708-n8-default-rtdb.firebaseio.com',
@@ -67,14 +58,12 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAA8wwYZgy4yP_znzbAVRTNqA7YJOdc7nk',
-    appId: '1:530194632368:ios:15ce8b6588acb0e929b575',
-    messagingSenderId: '530194632368',
-    projectId: 'ai-spor-analiz-2024',
-    databaseURL: 'https://ai-spor-analiz-2024-default-rtdb.firebaseio.com',
-    storageBucket: 'ai-spor-analiz-2024.firebasestorage.app',
-    iosClientId: '530194632368-kkfgqjf2tjtgc7f7jsd5fm9q3c2eo374.apps.googleusercontent.com',
-    iosBundleId: 'com.example.aiSporAnaliz',
+    apiKey: 'AIzaSyCQnHUPj9a6XuLPeF419SrO_GmmjoN_IG8',
+    appId: '1:10498248483:ios:XXXXXXXXXXXXXXXX', // ✅ Firebase Console'dan al
+    messagingSenderId: '10498248483',
+    projectId: 'compelling-weft-470708-n8',
+    databaseURL: 'https://compelling-weft-470708-n8-default-rtdb.firebaseio.com',
+    storageBucket: 'compelling-weft-470708-n8.firebasestorage.app',
+    iosBundleId: 'com.aisporanaliz.app',
   );
-
 }
