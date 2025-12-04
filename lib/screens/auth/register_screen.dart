@@ -277,7 +277,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             recognizer: TapGestureRecognizer()
                               ..onTap = () {
-                                _launchURL('https://bilwin.inc/terms');
+                                _launchURL('https://aikupon.com/terms');
                               },
                           ),
                           const TextSpan(text: "'ni okudum ve kabul ediyorum"),
@@ -309,7 +309,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             recognizer: TapGestureRecognizer()
                               ..onTap = () {
-                                _launchURL('https://bilwin.inc/privacy');
+                                _launchURL('https://aikupon.com/privacy');
                               },
                           ),
                           const TextSpan(text: "'nı okudum ve kabul ediyorum"),
