@@ -6,9 +6,9 @@ import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bulletin_provider.dart';
 import '../../services/gemini_service.dart';
-import '../../services/gemini_service_secure.dart'; // 🔐 Güvenli Gemini
+// import '../../services/gemini_service_secure.dart'; // 🔐 Devre dışı - Functions çalışmıyor
 import '../../services/football_api_service.dart';
-import '../../services/football_api_service_secure.dart'; // 🔐 Güvenli Football
+// import '../../services/football_api_service_secure.dart'; // 🔐 Devre dışı - Functions çalışmıyor
 import '../../services/match_pool_service.dart';
 
 class AnalysisScreen extends StatefulWidget {
@@ -26,9 +26,9 @@ class AnalysisScreen extends StatefulWidget {
 }
 
 class _AnalysisScreenState extends State<AnalysisScreen> {
-  // 🔐 GÜVENLİ SERVİSLER - Cloud Functions üzerinden
-  final GeminiServiceSecure _geminiService = GeminiServiceSecure();
-  final FootballApiServiceSecure _footballApi = FootballApiServiceSecure();
+  // ✅ DİREKT API SERVİSLERİ - Functions kullanılmıyor
+  final GeminiService _geminiService = GeminiService();
+  final FootballApiService _footballApi = FootballApiService();
   final MatchPoolService _matchPool = MatchPoolService();
   final BulletinProvider _bulletinProvider = BulletinProvider();
 

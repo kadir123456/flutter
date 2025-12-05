@@ -22,8 +22,7 @@ class FootballApiService {
       final encodedName = Uri.encodeComponent(cleanName);
       final url = Uri.parse('$_baseUrl/teams?search=$encodedName');
       final response = await http.get(url, headers: {
-        'x-rapidapi-host': 'v3.football.api-sports.io',
-        'x-rapidapi-key': _apiKey,
+        'x-apisports-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -66,8 +65,7 @@ class FootballApiService {
       final url = Uri.parse('$_baseUrl/teams/seasons?team=$teamId');
       
       final response = await http.get(url, headers: {
-        'x-rapidapi-host': 'v3.football.api-sports.io',
-        'x-rapidapi-key': _apiKey,
+        'x-apisports-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -138,8 +136,7 @@ class FootballApiService {
       final url = Uri.parse('$_baseUrl/teams/statistics?team=$teamId&season=$season&league=$leagueId');
 
       final response = await http.get(url, headers: {
-        'x-rapidapi-host': 'v3.football.api-sports.io',
-        'x-rapidapi-key': _apiKey,
+        'x-apisports-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -176,8 +173,7 @@ class FootballApiService {
       final url = Uri.parse('$_baseUrl/fixtures?team=$teamId&last=$limit');
 
       final response = await http.get(url, headers: {
-        'x-rapidapi-host': 'v3.football.api-sports.io',
-        'x-rapidapi-key': _apiKey,
+        'x-apisports-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -213,8 +209,7 @@ class FootballApiService {
       final response = await http.get(
         url,
         headers: {
-          'x-rapidapi-host': 'v3.football.api-sports.io',
-          'x-rapidapi-key': _apiKey,
+          'x-apisports-key': _apiKey,
         },
       );
 
@@ -243,8 +238,7 @@ class FootballApiService {
       final response = await http.get(
         url,
         headers: {
-          'x-rapidapi-host': 'v3.football.api-sports.io',
-          'x-rapidapi-key': _apiKey,
+          'x-apisports-key': _apiKey,
         },
       );
 
