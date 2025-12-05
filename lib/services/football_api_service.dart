@@ -75,16 +75,26 @@ class FootballApiService {
         final seasons = data['response'] as List?;
         
         if (seasons != null && seasons.isNotEmpty) {
-          // Son sezondaki ligleri al
-          final recentSeason = seasons.firstWhere(
-            (s) => s['year'] == season || s['year'] == season - 1,
-            orElse: () => seasons.first,
-          );
+          // ✅ FIX: Seasons direkt integer yıllar olabilir veya Map olabilir
+          dynamic recentSeason;
           
-          final leagues = recentSeason['leagues'] as List?;
-          if (leagues != null && leagues.isNotEmpty) {
-            // Lig ID'lerini çıkar
-            return leagues.map<int>((l) => l['league']['id'] as int).toList();
+          // İlk elemanın tipini kontrol et
+          if (seasons.first is int) {
+            // Direkt yıl listesi [2015, 2016, 2017...]
+            print('⚠️ Seasons direkt yıl listesi - Lig bilgisi alınamıyor');
+            return [];
+          } else if (seasons.first is Map) {
+            // Map formatında [{year: 2015, leagues: [...]}, ...]
+            recentSeason = seasons.firstWhere(
+              (s) => s['year'] == season || s['year'] == season - 1,
+              orElse: () => seasons.first,
+            );
+            
+            final leagues = recentSeason['leagues'] as List?;
+            if (leagues != null && leagues.isNotEmpty) {
+              // Lig ID'lerini çıkar
+              return leagues.map<int>((l) => l['league']['id'] as int).toList();
+            }
           }
         }
       }

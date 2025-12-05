@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bulletin_provider.dart';
 import '../../services/gemini_service.dart';
@@ -357,7 +358,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  /// ✅ Basitleştirilmiş prompt (Google Search olmadan)
+  /// ✅ Geliştirilmiş prompt - Çoklu tahmin tipleri
   String _buildSimplePrompt(List<Map<String, dynamic>> matches) {
     final matchesInfo = matches.asMap().entries.map((entry) {
       final index = entry.key + 1;
@@ -366,24 +367,31 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       String matchInfo = 'MAÇ $index: ${match['homeTeam']} vs ${match['awayTeam']}\n';
       matchInfo += 'Kullanıcı Tahmini: ${match['userPrediction']}\n';
       
+      bool hasFullData = false;
+      bool hasPartialData = false;
+      
       if (match['dataSource'] == 'firebase-pool-with-stats' || match['dataSource'] == 'firebase-pool') {
         // Firebase Pool'dan gelen veriler (stats API'den çekilmiş olabilir)
         final homeStats = match['homeStats'];
         final awayStats = match['awayStats'];
         final h2h = match['h2h'] as List?;
         
-        if (homeStats != null) {
+        if (homeStats != null && awayStats != null) {
+          hasFullData = true;
           matchInfo += '\n📊 Ev Sahibi İstatistikleri:\n';
           matchInfo += '  Form: ${homeStats['form'] ?? 'Bilinmiyor'}\n';
           matchInfo += '  Atılan Gol (Ort): ${homeStats['goals']?['for']?['average']?['total'] ?? 'Bilinmiyor'}\n';
           matchInfo += '  Yenilen Gol (Ort): ${homeStats['goals']?['against']?['average']?['total'] ?? 'Bilinmiyor'}\n';
-        }
-        
-        if (awayStats != null) {
+          matchInfo += '  Toplam Gol: ${homeStats['goals']?['for']?['total']?['total'] ?? 'Bilinmiyor'}\n';
+          
           matchInfo += '\n📊 Deplasman İstatistikleri:\n';
           matchInfo += '  Form: ${awayStats['form'] ?? 'Bilinmiyor'}\n';
           matchInfo += '  Atılan Gol (Ort): ${awayStats['goals']?['for']?['average']?['total'] ?? 'Bilinmiyor'}\n';
           matchInfo += '  Yenilen Gol (Ort): ${awayStats['goals']?['against']?['average']?['total'] ?? 'Bilinmiyor'}\n';
+          matchInfo += '  Toplam Gol: ${awayStats['goals']?['for']?['total']?['total'] ?? 'Bilinmiyor'}\n';
+        } else {
+          hasPartialData = true;
+          matchInfo += '\n⚠️ İstatistik verisi kısıtlı\n';
         }
         
         if (h2h != null && h2h.isNotEmpty) {
@@ -394,15 +402,23 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         final homeData = match['homeData'];
         final awayData = match['awayData'];
         
+        if (homeData['found'] && awayData['found'] && homeData['stats'] != null && awayData['stats'] != null) {
+          hasFullData = true;
+        } else {
+          hasPartialData = true;
+        }
+        
         matchInfo += '\n${_formatTeamStats(homeData)}\n';
         matchInfo += '${_formatTeamStats(awayData)}\n';
       }
+      
+      matchInfo += '\n📌 Veri Kalitesi: ${hasFullData ? 'TAM VERİ' : hasPartialData ? 'KISITLI VERİ' : 'VERİ YOK'}\n';
       
       return matchInfo;
     }).join('\n---\n');
 
     return '''
-Profesyonel futbol analisti olarak analiz yap.
+Sen profesyonel bir futbol analisti ve bahis uzmanısın. Verilen istatistiklere göre detaylı tahminler yap.
 
 $matchesInfo
 
@@ -413,19 +429,35 @@ JSON formatında yanıt ver:
       "matchIndex": 1,
       "homeTeam": "Takım Adı",
       "awayTeam": "Takım Adı",
-      "aiPrediction": "1",
-      "confidence": 75,
-      "reasoning": "Kısa analiz (max 100 karakter)"
+      "dataQuality": "full|partial|none",
+      "predictions": {
+        "MS": {"prediction": "1", "confidence": 75, "reasoning": "Açıklama"},
+        "IY": {"prediction": "1", "confidence": 65, "reasoning": "Açıklama"},
+        "AltUst": {"prediction": "Üst 2.5", "confidence": 70, "reasoning": "Açıklama"},
+        "KG": {"prediction": "Var", "confidence": 60, "reasoning": "Açıklama"},
+        "Korner": {"prediction": "Üst 9.5", "confidence": 55, "reasoning": "Açıklama"}
+      },
+      "generalNote": "Genel değerlendirme (max 150 karakter)"
     }
   ]
 }
 
-Kurallar:
-- aiPrediction: "1" (Ev Sahibi), "X" (Beraberlik), "2" (Deplasman)
-- confidence: 0-100 arası
-- reasoning: Maksimum 100 karakter
+Tahmin Açıklamaları:
+- MS (Maç Sonucu): "1" (Ev Sahibi), "X" (Beraberlik), "2" (Deplasman)
+- IY (İlk Yarı): "1" (Ev Sahibi), "X" (Beraberlik), "2" (Deplasman)
+- AltUst: "Alt 2.5" veya "Üst 2.5" (Toplam gol)
+- KG (Karşılıklı Gol): "Var" veya "Yok"
+- Korner: "Alt 9.5" veya "Üst 9.5"
 
-Sadece JSON döndür.
+ÖNEMLİ KURALLAR:
+1. dataQuality: "full" (tam veri), "partial" (kısıtlı veri), "none" (veri yok)
+2. Eğer veri yoksa veya kısıtlıysa, confidence değerlerini düşük tut (30-50)
+3. Veri yoksa reasoning'de "VERİ YETERSİZ - Tahmin güvenilir değil" yaz
+4. confidence: 0-100 arası sayı
+5. reasoning: Her tahmin için maksimum 80 karakter
+6. generalNote: Genel değerlendirme, maksimum 150 karakter
+
+Sadece JSON döndür, başka açıklama ekleme.
 ''';
   }
 
@@ -453,7 +485,7 @@ Sadece JSON döndür.
     return result.isNotEmpty ? result : '- Kısmi veri var';
   }
 
-  /// Batch yanıtını parse et
+  /// Batch yanıtını parse et - Yeni çoklu tahmin formatı
   List<Map<String, dynamic>> _parseBatchAnalysisResponse(
     String response,
     List<Map<String, dynamic>> originalMatches,
@@ -467,24 +499,63 @@ Sadece JSON döndür.
       final jsonData = jsonDecode(jsonMatch.group(0)!);
       final analyses = (jsonData['analyses'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
+      if (analyses.isEmpty) {
+        throw Exception('Boş analiz yanıtı');
+      }
+
+      print('✅ ${analyses.length} maç analizi parse edildi');
       return analyses;
     } catch (e) {
       print('❌ Yanıt parse hatası: $e');
+      print('📄 Response: ${response.substring(0, response.length > 500 ? 500 : response.length)}...');
       
-      // Fallback: Manuel sonuçlar oluştur
+      // Fallback: Manuel sonuçlar oluştur (yeni format)
       return originalMatches.asMap().entries.map((entry) {
         final index = entry.key;
         final match = entry.value;
+        final dataSource = match['dataSource'] ?? 'unknown';
+        
+        // Veri kalitesini belirle
+        String dataQuality = 'none';
+        if (dataSource == 'firebase-pool-with-stats') {
+          dataQuality = 'full';
+        } else if (dataSource == 'firebase-pool' || dataSource == 'football-api') {
+          dataQuality = 'partial';
+        }
         
         return {
           'matchIndex': index + 1,
           'homeTeam': match['homeTeam'],
           'awayTeam': match['awayTeam'],
-          'userPrediction': match['userPrediction'] ?? '?',
-          'aiPrediction': '?',
-          'confidence': 0,
-          'reasoning': 'Analiz yapılamadı - Teknik hata',
-          'dataSource': 'fallback',
+          'dataQuality': dataQuality,
+          'predictions': {
+            'MS': {
+              'prediction': '?',
+              'confidence': 0,
+              'reasoning': 'Analiz yapılamadı - Teknik hata',
+            },
+            'IY': {
+              'prediction': '?',
+              'confidence': 0,
+              'reasoning': 'Analiz yapılamadı',
+            },
+            'AltUst': {
+              'prediction': '?',
+              'confidence': 0,
+              'reasoning': 'Analiz yapılamadı',
+            },
+            'KG': {
+              'prediction': '?',
+              'confidence': 0,
+              'reasoning': 'Analiz yapılamadı',
+            },
+            'Korner': {
+              'prediction': '?',
+              'confidence': 0,
+              'reasoning': 'Analiz yapılamadı',
+            },
+          },
+          'generalNote': '⚠️ AI analizi yapılamadı. Lütfen tekrar deneyin veya destek ile iletişime geçin.',
         };
       }).toList();
     }
@@ -555,6 +626,18 @@ Sadece JSON döndür.
       appBar: AppBar(
         title: const Text('Analiz Sonuçları'),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // go_router kullanıldığı için context.pop() kullan
+            // Eğer pop edilemezse home'a yönlendir
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
       ),
       body: _isAnalyzing ? _buildLoadingView() : _buildResultsView(),
     );
@@ -609,7 +692,13 @@ Sadece JSON döndür.
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/home');
+                  }
+                },
                 child: const Text('Geri Dön'),
               ),
             ],
@@ -619,6 +708,18 @@ Sadece JSON döndür.
     }
 
     final totalCount = _analysisResults.length;
+    
+    // Veri kalitesi analizi
+    int fullDataCount = 0;
+    int partialDataCount = 0;
+    int noDataCount = 0;
+    
+    for (var result in _analysisResults) {
+      final quality = result['dataQuality'] ?? 'unknown';
+      if (quality == 'full') fullDataCount++;
+      else if (quality == 'partial') partialDataCount++;
+      else if (quality == 'none') noDataCount++;
+    }
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -648,10 +749,127 @@ Sadece JSON döndür.
                   'AI tarafından profesyonel analiz yapıldı',
                   style: TextStyle(color: Colors.grey[700]),
                 ),
+                const SizedBox(height: 16),
+                // Veri Kalitesi İstatistikleri
+                if (fullDataCount > 0 || partialDataCount > 0 || noDataCount > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        if (fullDataCount > 0)
+                          _buildDataQualityStat(Icons.verified, 'Tam Veri', fullDataCount, Colors.green),
+                        if (partialDataCount > 0)
+                          _buildDataQualityStat(Icons.warning, 'Kısıtlı', partialDataCount, Colors.orange),
+                        if (noDataCount > 0)
+                          _buildDataQualityStat(Icons.error, 'Veri Yok', noDataCount, Colors.red),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ),
+        
+        // Uyarı mesajı (veri kalitesi düşükse)
+        if (partialDataCount > 0 || noDataCount > 0) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange[300]!, width: 2),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, color: Colors.orange[800], size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '⚠️ Dikkat',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Colors.orange[900],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Bazı maçlar için yeterli istatistik verisi bulunamadı. Bu maçlardaki tahminler daha düşük güvenilirliğe sahiptir. Lütfen kendi araştırmanızı da yapın.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.orange[800],
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        
+        const SizedBox(height: 16),
+        
+        // Bilgilendirme Kartı
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blue[700]!, Colors.blue[500]!],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.lightbulb, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Tahmin Açıklamaları',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildLegendItem('MS', 'Maç Sonucu (1/X/2)'),
+              _buildLegendItem('İY', 'İlk Yarı Sonucu'),
+              _buildLegendItem('Alt/Üst', 'Toplam Gol (2.5 gol üstü/altı)'),
+              _buildLegendItem('KG', 'Karşılıklı Gol (Var/Yok)'),
+              _buildLegendItem('Korner', 'Toplam Korner (9.5 üstü/altı)'),
+              const SizedBox(height: 8),
+              Text(
+                '💡 İstediğiniz tahmini oynayabilirsiniz. Güven seviyesini kontrol edin.',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+
         const SizedBox(height: 16),
 
         // Maç Sonuçları
@@ -660,7 +878,327 @@ Sadece JSON döndür.
     );
   }
 
+  Widget _buildDataQualityStat(IconData icon, String label, int count, Color color) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          '$count',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLegendItem(String code, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              code,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              description,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMatchCard(Map<String, dynamic> result) {
+    // Yeni format kontrolü
+    final predictions = result['predictions'] as Map<String, dynamic>?;
+    final dataQuality = result['dataQuality'] ?? 'unknown';
+    final generalNote = result['generalNote'] ?? '';
+    
+    // Eski format desteği (geriye dönük uyumluluk)
+    if (predictions == null) {
+      return _buildLegacyMatchCard(result);
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: _getDataQualityColor(dataQuality).withOpacity(0.3),
+          width: 2,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Maç Başlığı ve Veri Kalitesi
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${result['homeTeam']} vs ${result['awayTeam']}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                    ),
+                  ),
+                ),
+                _buildDataQualityBadge(dataQuality),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Tahmin Tipleri - Grid
+            _buildPredictionGrid(predictions),
+            
+            // Genel Not
+            if (generalNote.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: Colors.blue[700],
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        generalNote,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.blue[900],
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPredictionGrid(Map<String, dynamic> predictions) {
+    final predictionTypes = [
+      {'key': 'MS', 'icon': Icons.sports_soccer, 'label': 'Maç Sonucu'},
+      {'key': 'IY', 'icon': Icons.timer, 'label': 'İlk Yarı'},
+      {'key': 'AltUst', 'icon': Icons.show_chart, 'label': 'Alt/Üst 2.5'},
+      {'key': 'KG', 'icon': Icons.swap_horiz, 'label': 'Karşılıklı Gol'},
+      {'key': 'Korner', 'icon': Icons.flag, 'label': 'Korner'},
+    ];
+
+    return Column(
+      children: predictionTypes.map((type) {
+        final pred = predictions[type['key']] as Map<String, dynamic>?;
+        
+        if (pred == null) return const SizedBox.shrink();
+        
+        final prediction = pred['prediction'] ?? '?';
+        final confidence = pred['confidence'] ?? 0;
+        final reasoning = pred['reasoning'] ?? '';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    type['icon'] as IconData,
+                    size: 18,
+                    color: Colors.blue[700],
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      type['label'] as String,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getConfidenceColor(confidence).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _getConfidenceColor(confidence),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      '%$confidence',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: _getConfidenceColor(confidence),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[100],
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      prediction,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Colors.blue[900],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      reasoning,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[700],
+                        fontStyle: FontStyle.italic,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildDataQualityBadge(String quality) {
+    IconData icon;
+    String label;
+    Color color;
+    
+    switch (quality) {
+      case 'full':
+        icon = Icons.verified;
+        label = 'TAM VERİ';
+        color = Colors.green;
+        break;
+      case 'partial':
+        icon = Icons.warning;
+        label = 'KISITLI VERİ';
+        color = Colors.orange;
+        break;
+      case 'none':
+        icon = Icons.error;
+        label = 'VERİ YOK';
+        color = Colors.red;
+        break;
+      default:
+        icon = Icons.help;
+        label = 'BİLİNMİYOR';
+        color = Colors.grey;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getDataQualityColor(String quality) {
+    switch (quality) {
+      case 'full':
+        return Colors.green;
+      case 'partial':
+        return Colors.orange;
+      case 'none':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // Eski format desteği
+  Widget _buildLegacyMatchCard(Map<String, dynamic> result) {
     final confidence = result['confidence'] ?? 0;
 
     return Card(
@@ -671,110 +1209,47 @@ Sadece JSON döndür.
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Maç Bilgisi
             Text(
               '${result['homeTeam']} vs ${result['awayTeam']}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 17,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
             ),
             const SizedBox(height: 16),
-            
-            // AI Tahmini
             Row(
               children: [
-                Icon(
-                  Icons.psychology,
-                  color: Colors.blue[600],
-                  size: 20,
-                ),
+                Icon(Icons.psychology, color: Colors.blue[600], size: 20),
                 const SizedBox(width: 8),
-                Text(
-                  'AI Tahmini:',
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                Text('AI Tahmini:', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _formatPrediction(result['aiPrediction']),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Colors.blue[900],
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue[900]),
                   ),
                 ),
-                // Güven Seviyesi
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: _getConfidenceColor(confidence).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _getConfidenceColor(confidence),
-                      width: 1.5,
-                    ),
+                    border: Border.all(color: _getConfidenceColor(confidence), width: 1.5),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.bar_chart,
-                        size: 14,
-                        color: _getConfidenceColor(confidence),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '%$confidence',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: _getConfidenceColor(confidence),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    '%$confidence',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _getConfidenceColor(confidence)),
                   ),
                 ),
               ],
             ),
-            
-            // Analiz Nedeni
             if (result['reasoning'] != null && result['reasoning'].toString().isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
-                width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.grey[50],
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.grey[200]!),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.lightbulb_outline,
-                      size: 16,
-                      color: Colors.orange[700],
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        result['reasoning'],
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[800],
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: Text(result['reasoning'], style: TextStyle(fontSize: 13, color: Colors.grey[800])),
               ),
             ],
           ],
