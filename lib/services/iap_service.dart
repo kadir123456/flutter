@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class InAppPurchaseService {
   final InAppPurchase _inAppPurchase = InAppPurchase.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
   late StreamSubscription<List<PurchaseDetails>> _subscription;
   
   // Product ID'leri - Google Play Console'da tanımlanacak
@@ -40,6 +42,9 @@ class InAppPurchaseService {
   // Satın alma callback'i
   Function(PurchaseDetails)? onPurchaseSuccess;
   Function(String)? onPurchaseError;
+  
+  // Package name (Android) - build.gradle.kts'den alınmıştır
+  static const String packageName = 'com.aisporanaliz.app';
   
   // Initialize
   Future<void> initialize() async {
@@ -157,15 +162,81 @@ class InAppPurchaseService {
           onPurchaseError?.call(purchaseDetails.error?.message ?? 'Bilinmeyen hata');
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
                    purchaseDetails.status == PurchaseStatus.restored) {
-          // Satın alma başarılı
-          _purchasePending = false;
-          onPurchaseSuccess?.call(purchaseDetails);
+          // ✅ SUNUCU TARAFI DOĞRULAMA
+          _verifyPurchaseWithServer(purchaseDetails);
         }
+        
+        // Satın almayı tamamla (doğrulama sonrası yapılacak)
+        // if (purchaseDetails.pendingCompletePurchase) {
+        //   _inAppPurchase.completePurchase(purchaseDetails);
+        // }
+      }
+    }
+  }
+  
+  // 🔐 SUNUCU DOĞRULAMA - Sahte satın almaları engeller!
+  Future<void> _verifyPurchaseWithServer(PurchaseDetails purchaseDetails) async {
+    try {
+      debugPrint('🔐 Satın alma sunucu doğrulaması başlıyor...');
+      
+      String? purchaseToken;
+      
+      // Android için purchase token al
+      if (Platform.isAndroid) {
+        final androidDetails = purchaseDetails as PurchaseDetails;
+        // verificationData içinde serverVerificationData var
+        purchaseToken = androidDetails.verificationData.serverVerificationData;
+      }
+      
+      if (purchaseToken == null || purchaseToken.isEmpty) {
+        debugPrint('❌ Purchase token bulunamadı');
+        _purchasePending = false;
+        onPurchaseError?.call('Satın alma bilgisi eksik');
+        return;
+      }
+      
+      // Firebase Functions ile doğrula
+      final callable = _functions.httpsCallable('verifyGooglePlayPurchase');
+      final result = await callable.call({
+        'productId': purchaseDetails.productID,
+        'purchaseToken': purchaseToken,
+        'packageName': packageName,
+      });
+      
+      final data = result.data;
+      
+      if (data['success'] == true && data['verified'] == true) {
+        debugPrint('✅ Satın alma sunucuda doğrulandı: ${data['orderId']}');
+        
+        // Başarılı - Callback çağır
+        _purchasePending = false;
+        onPurchaseSuccess?.call(purchaseDetails);
         
         // Satın almayı tamamla
         if (purchaseDetails.pendingCompletePurchase) {
-          _inAppPurchase.completePurchase(purchaseDetails);
+          await _inAppPurchase.completePurchase(purchaseDetails);
+          debugPrint('✅ Purchase completed');
         }
+      } else {
+        debugPrint('❌ Sunucu doğrulama başarısız');
+        _purchasePending = false;
+        onPurchaseError?.call('Satın alma doğrulanamadı');
+      }
+    } catch (e) {
+      debugPrint('❌ Sunucu doğrulama hatası: $e');
+      _purchasePending = false;
+      
+      // Hata mesajını kontrol et
+      if (e.toString().contains('already-exists') || 
+          e.toString().contains('Bu satın alma daha önce kullanıldı')) {
+        onPurchaseError?.call('Bu satın alma zaten kullanılmış');
+      } else {
+        onPurchaseError?.call('Doğrulama hatası: ${e.toString()}');
+      }
+      
+      // Purchase'ı complete et (hata durumunda da)
+      if (purchaseDetails.pendingCompletePurchase) {
+        await _inAppPurchase.completePurchase(purchaseDetails);
       }
     }
   }
