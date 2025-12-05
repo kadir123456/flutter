@@ -6,9 +6,181 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const https = require("https");
+const axios = require("axios");
 
 // Firebase Admin initialize
 admin.initializeApp();
+
+// ============================================
+// 🔐 GÜVENLİK: API PROXY FUNCTIONS
+// API anahtarları artık sadece Cloud Functions'da
+// ============================================
+
+/**
+ * 🤖 GEMINI API PROXY (Güvenli)
+ * Client'tan gelen istekleri Gemini'ye proxy yapar
+ * API key sadece burada saklanır
+ */
+exports.callGeminiAPI = functions.https.onCall(async (data, context) => {
+  // Auth kontrolü - Sadece giriş yapmış kullanıcılar
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Bu işlem için giriş yapmalısınız",
+    );
+  }
+
+  const {prompt, imageBase64} = data;
+
+  if (!prompt) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Prompt gereklidir",
+    );
+  }
+
+  try {
+    // Remote Config'den API key al (sadece server-side)
+    const db = admin.database();
+    const apiKeySnapshot = await db.ref("remoteConfig/GEMINI_API_KEY").get();
+    const apiKey = apiKeySnapshot.val();
+
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY yapılandırılmamış");
+    }
+
+    functions.logger.info(
+        `🤖 Gemini API çağrısı - User: ${context.auth.uid}`,
+    );
+
+    // Gemini API'ye istek gönder
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const requestBody = {
+      contents: [{
+        parts: [],
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      },
+    };
+
+    // Text ekle
+    requestBody.contents[0].parts.push({
+      text: prompt,
+    });
+
+    // Görsel varsa ekle
+    if (imageBase64) {
+      requestBody.contents[0].parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: imageBase64,
+        },
+      });
+    }
+
+    const response = await axios.post(geminiUrl, requestBody, {
+      headers: {"Content-Type": "application/json"},
+      timeout: 60000, // 60 saniye timeout
+    });
+
+    const result = response.data;
+
+    if (!result.candidates || result.candidates.length === 0) {
+      throw new Error("Gemini API'den yanıt alınamadı");
+    }
+
+    const text = result.candidates[0].content.parts[0].text;
+
+    functions.logger.info("✅ Gemini API başarılı");
+
+    return {
+      success: true,
+      text: text,
+      usage: result.usageMetadata,
+    };
+  } catch (error) {
+    functions.logger.error("❌ Gemini API hatası:", error.message);
+
+    throw new functions.https.HttpsError(
+        "internal",
+        `Gemini API hatası: ${error.message}`,
+    );
+  }
+});
+
+/**
+ * ⚽ FOOTBALL API PROXY (Güvenli)
+ * Client'tan gelen istekleri Football API'ye proxy yapar
+ * API key sadece burada saklanır
+ */
+exports.callFootballAPI = functions.https.onCall(async (data, context) => {
+  // Auth kontrolü
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Bu işlem için giriş yapmalısınız",
+    );
+  }
+
+  const {endpoint, params} = data;
+
+  if (!endpoint) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Endpoint gereklidir",
+    );
+  }
+
+  try {
+    // Remote Config'den API key al
+    const db = admin.database();
+    const apiKeySnapshot = await db.ref("remoteConfig/API_FOOTBALL_KEY").get();
+    const apiKey = apiKeySnapshot.val();
+
+    if (!apiKey) {
+      throw new Error("API_FOOTBALL_KEY yapılandırılmamış");
+    }
+
+    functions.logger.info(
+        `⚽ Football API çağrısı - User: ${context.auth.uid}, Endpoint: ${endpoint}`,
+    );
+
+    // Football API'ye istek gönder
+    const baseUrl = "https://v3.football.api-sports.io";
+    const url = `${baseUrl}${endpoint}`;
+
+    const response = await axios.get(url, {
+      headers: {
+        "x-apisports-key": apiKey,
+      },
+      params: params || {},
+      timeout: 30000, // 30 saniye timeout
+    });
+
+    functions.logger.info("✅ Football API başarılı");
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    functions.logger.error("❌ Football API hatası:", error.message);
+
+    throw new functions.https.HttpsError(
+        "internal",
+        `Football API hatası: ${error.message}`,
+    );
+  }
+});
+
+// ============================================
+// ⚽ MATCH POOL GÜNCELLEMESİ (Mevcut)
+// ============================================
 
 /**
  * 🔥 SCHEDULED FUNCTION: Her 12 saatte bir Match Pool güncelle
