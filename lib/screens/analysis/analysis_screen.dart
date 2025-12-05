@@ -724,156 +724,118 @@ Sadece JSON döndür, başka açıklama ekleme.
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Özet Kartı
-        Card(
-          color: Colors.blue[50],
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.sports_soccer,
-                  size: 48,
-                  color: Colors.blue[700],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '$totalCount Maç Analiz Edildi',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.blue[900],
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'AI tarafından profesyonel analiz yapıldı',
-                  style: TextStyle(color: Colors.grey[700]),
-                ),
-                const SizedBox(height: 16),
-                // Veri Kalitesi İstatistikleri
-                if (fullDataCount > 0 || partialDataCount > 0 || noDataCount > 0) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue[200]!),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        if (fullDataCount > 0)
-                          _buildDataQualityStat(Icons.verified, 'Tam Veri', fullDataCount, Colors.green),
-                        if (partialDataCount > 0)
-                          _buildDataQualityStat(Icons.warning, 'Kısıtlı', partialDataCount, Colors.orange),
-                        if (noDataCount > 0)
-                          _buildDataQualityStat(Icons.error, 'Veri Yok', noDataCount, Colors.red),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
+        // Özet Kartı - Yeni Tasarım
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blue[600]!, Colors.blue[400]!],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ),
-        
-        // Uyarı mesajı (veri kalitesi düşükse)
-        if (partialDataCount > 0 || noDataCount > 0) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange[300]!, width: 2),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline, color: Colors.orange[800], size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '⚠️ Dikkat',
+                      const Text(
+                        'Analiz Tamamlandı',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: Colors.orange[900],
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Bazı maçlar için yeterli istatistik verisi bulunamadı. Bu maçlardaki tahminler daha düşük güvenilirliğe sahiptir. Lütfen kendi araştırmanızı da yapın.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.orange[800],
-                          height: 1.4,
+                        '$totalCount Maç',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        
-        const SizedBox(height: 16),
-        
-        // Bilgilendirme Kartı
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blue[700]!, Colors.blue[500]!],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.lightbulb, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Tahmin Açıklamaları',
-                    style: TextStyle(
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.sports_soccer,
+                      size: 40,
                       color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _buildLegendItem('MS', 'Maç Sonucu (1/X/2)'),
-              _buildLegendItem('İY', 'İlk Yarı Sonucu'),
-              _buildLegendItem('Alt/Üst', 'Toplam Gol (2.5 gol üstü/altı)'),
-              _buildLegendItem('KG', 'Karşılıklı Gol (Var/Yok)'),
-              _buildLegendItem('Korner', 'Toplam Korner (9.5 üstü/altı)'),
-              const SizedBox(height: 8),
-              Text(
-                '💡 İstediğiniz tahmini oynayabilirsiniz. Güven seviyesini kontrol edin.',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
+              if (fullDataCount > 0 || partialDataCount > 0 || noDataCount > 0) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      if (fullDataCount > 0)
+                        _buildCompactStat('$fullDataCount', 'Tam Veri', Colors.green[300]!),
+                      if (partialDataCount > 0)
+                        _buildCompactStat('$partialDataCount', 'Kısıtlı', Colors.orange[300]!),
+                      if (noDataCount > 0)
+                        _buildCompactStat('$noDataCount', 'Veri Yok', Colors.red[300]!),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
-
-        const SizedBox(height: 16),
+        
+        const SizedBox(height: 20),
 
         // Maç Sonuçları
         ..._analysisResults.map((result) => _buildMatchCard(result)),
+      ],
+    );
+  }
+
+  Widget _buildCompactStat(String value, String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$value $label',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -948,91 +910,180 @@ Sadece JSON döndür, başka açıklama ekleme.
       return _buildLegacyMatchCard(result);
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: _getDataQualityColor(dataQuality).withOpacity(0.3),
-          width: 2,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Colors.grey[300]!,
+          width: 1,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Maç Başlığı ve Veri Kalitesi
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Başlık Bölümü
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
               children: [
+                Icon(Icons.sports_soccer, size: 20, color: Colors.grey[600]),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    '${result['homeTeam']} vs ${result['awayTeam']}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 17,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${result['homeTeam']} - ${result['awayTeam']}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 _buildDataQualityBadge(dataQuality),
               ],
             ),
-            const SizedBox(height: 16),
-            
-            // Tahmin Tipleri - Grid
-            _buildPredictionGrid(predictions),
-            
-            // Genel Not
-            if (generalNote.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue[200]!),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 18,
-                      color: Colors.blue[700],
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        generalNote,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.blue[900],
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
+          ),
+          
+          // Tahminler - Betting Style
+          _buildBettingStylePredictions(predictions),
+          
+          // Açıklama (varsa)
+          if (generalNote.isNotEmpty && !generalNote.contains('yapılamadı')) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                border: Border(
+                  top: BorderSide(color: Colors.grey[200]!, width: 1),
                 ),
               ),
-            ],
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 14,
+                    color: Colors.blue[600],
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      generalNote,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[700],
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildPredictionGrid(Map<String, dynamic> predictions) {
+  Widget _buildBettingStylePredictions(Map<String, dynamic> predictions) {
     final predictionTypes = [
-      {'key': 'MS', 'icon': Icons.sports_soccer, 'label': 'Maç Sonucu'},
-      {'key': 'IY', 'icon': Icons.timer, 'label': 'İlk Yarı'},
-      {'key': 'AltUst', 'icon': Icons.show_chart, 'label': 'Alt/Üst 2.5'},
-      {'key': 'KG', 'icon': Icons.swap_horiz, 'label': 'Karşılıklı Gol'},
-      {'key': 'Korner', 'icon': Icons.flag, 'label': 'Korner'},
+      {'key': 'MS', 'label': 'MS'},
+      {'key': 'IY', 'label': 'İY'},
+      {'key': 'AltUst', 'label': 'Alt/Üst'},
+      {'key': 'KG', 'label': 'KG'},
+      {'key': 'Korner', 'label': 'Korner'},
     ];
 
-    return Column(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Row(
+        children: predictionTypes.map((type) {
+          final pred = predictions[type['key']] as Map<String, dynamic>?;
+          
+          if (pred == null) return const SizedBox.shrink();
+          
+          final prediction = pred['prediction'] ?? '?';
+          final confidence = pred['confidence'] ?? 0;
+
+          return Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              decoration: BoxDecoration(
+                color: Colors.grey[700],
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Label
+                  Text(
+                    type['label'] as String,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[400],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Tahmin Değeri
+                  Text(
+                    prediction,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                  ),
+                  const SizedBox(height: 4),
+                  // Güven Seviyesi
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getConfidenceColor(confidence).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '%$confidence',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: _getConfidenceColor(confidence),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCompactPredictions(Map<String, dynamic> predictions) {
+    final predictionTypes = [
+      {'key': 'MS', 'label': 'MS'},
+      {'key': 'IY', 'label': 'İY'},
+      {'key': 'AltUst', 'label': 'Alt/Üst'},
+      {'key': 'KG', 'label': 'KG'},
+      {'key': 'Korner', 'label': 'Korner'},
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: predictionTypes.map((type) {
         final pred = predictions[type['key']] as Map<String, dynamic>?;
         
@@ -1043,92 +1094,154 @@ Sadece JSON döndür, başka açıklama ekleme.
         final reasoning = pred['reasoning'] ?? '';
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.grey[50],
+            color: _getConfidenceColor(confidence).withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[300]!),
+            border: Border.all(
+              color: _getConfidenceColor(confidence).withOpacity(0.4),
+              width: 1.5,
+            ),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    type['icon'] as IconData,
-                    size: 18,
-                    color: Colors.blue[700],
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      type['label'] as String,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getConfidenceColor(confidence).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: _getConfidenceColor(confidence),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Text(
-                      '%$confidence',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: _getConfidenceColor(confidence),
-                      ),
-                    ),
-                  ),
-                ],
+              // Label
+              Text(
+                type['label'] as String,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[100],
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      prediction,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Colors.blue[900],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      reasoning,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[700],
-                        fontStyle: FontStyle.italic,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 4),
+              // Tahmin
+              Text(
+                prediction,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // Güven Seviyesi
+              Text(
+                '%$confidence',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: _getConfidenceColor(confidence),
+                ),
               ),
             ],
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildPredictionGrid(Map<String, dynamic> predictions) {
+    final predictionTypes = [
+      {'key': 'MS', 'icon': Icons.sports_soccer, 'label': 'MS', 'fullLabel': 'Maç Sonucu'},
+      {'key': 'IY', 'icon': Icons.timer, 'label': 'İY', 'fullLabel': 'İlk Yarı'},
+      {'key': 'AltUst', 'icon': Icons.show_chart, 'label': 'Alt/Üst', 'fullLabel': 'Toplam Gol'},
+      {'key': 'KG', 'icon': Icons.swap_horiz, 'label': 'KG', 'fullLabel': 'Karşılıklı Gol'},
+      {'key': 'Korner', 'icon': Icons.flag, 'label': 'Korner', 'fullLabel': 'Korner Sayısı'},
+    ];
+
+    return Column(
+      children: [
+        // Grid Layout - 2 sütun
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 1.4,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
+          itemCount: predictionTypes.length,
+          itemBuilder: (context, index) {
+            final type = predictionTypes[index];
+            final pred = predictions[type['key']] as Map<String, dynamic>?;
+            
+            if (pred == null) return const SizedBox.shrink();
+            
+            final prediction = pred['prediction'] ?? '?';
+            final confidence = pred['confidence'] ?? 0;
+
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _getConfidenceColor(confidence).withOpacity(0.3),
+                  width: 2,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(
+                        type['icon'] as IconData,
+                        size: 20,
+                        color: Colors.grey[600],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getConfidenceColor(confidence).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '%$confidence',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                            color: _getConfidenceColor(confidence),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        type['label'] as String,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        prediction,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -1139,23 +1252,23 @@ Sadece JSON döndür, başka açıklama ekleme.
     
     switch (quality) {
       case 'full':
-        icon = Icons.verified;
-        label = 'TAM VERİ';
+        icon = Icons.check_circle;
+        label = 'Tam Veri';
         color = Colors.green;
         break;
       case 'partial':
-        icon = Icons.warning;
-        label = 'KISITLI VERİ';
+        icon = Icons.info;
+        label = 'Kısıtlı Veri';
         color = Colors.orange;
         break;
       case 'none':
-        icon = Icons.error;
-        label = 'VERİ YOK';
+        icon = Icons.warning;
+        label = 'Veri Yok';
         color = Colors.red;
         break;
       default:
-        icon = Icons.help;
-        label = 'BİLİNMİYOR';
+        icon = Icons.help_outline;
+        label = 'Bilinmiyor';
         color = Colors.grey;
     }
     
@@ -1163,19 +1276,18 @@ Sadece JSON döndür, başka açıklama ekleme.
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color, width: 1.5),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               color: color,
             ),
           ),
