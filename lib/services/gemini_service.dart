@@ -12,10 +12,10 @@ class GeminiService {
   
   String get _apiKey => _remoteConfig.geminiApiKey;
 
-  /// Gemini 2.0 Flash Thinking Exp ile görsel analizi
+  /// Gemini Flash ile görsel analizi
   Future<String> analyzeImage(String base64Image) async {
     try {
-      // ⭐ DEĞİŞTİ: gemini-2.5-pro → gemini-2.0-flash-thinking-exp
+      // ✅ Güncel model: gemini-1.5-flash (stabil ve hızlı)
       final url = Uri.parse('$_baseUrl/gemini-2.5-pro:generateContent?key=$_apiKey');
 
       final body = jsonEncode({
@@ -90,7 +90,7 @@ Sadece JSON döndür, başka açıklama yazma.'''
   /// Metin analizi (opsiyonel)
   Future<String> analyzeText(String prompt) async {
     try {
-      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-exp:generateContent?key=$_apiKey');
+      final url = Uri.parse('$_baseUrl/gemini-1.5-flash:generateContent?key=$_apiKey');
 
       final body = jsonEncode({
         'contents': [
@@ -129,7 +129,7 @@ Sadece JSON döndür, başka açıklama yazma.'''
     try {
       print('🔍 Google Search ile analiz başlatılıyor...');
       
-      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-thinking-exp:generateContent?key=$_apiKey');
+      final url = Uri.parse('$_baseUrl/gemini-1.5-flash:generateContent?key=$_apiKey');
 
       final body = jsonEncode({
         'contents': [
@@ -177,7 +177,7 @@ Sadece JSON döndür, başka açıklama yazma.'''
   /// ⭐ YENİ: Opsiyonel Google Search ile analiz
   Future<String> analyzeWithOptionalSearch(String prompt, {bool useSearch = false}) async {
     try {
-      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-exp:generateContent?key=$_apiKey');
+      final url = Uri.parse('$_baseUrl/gemini-1.5-flash:generateContent?key=$_apiKey');
 
       final body = jsonEncode({
         'contents': [

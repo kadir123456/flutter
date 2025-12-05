@@ -25,24 +25,36 @@ exports.callGeminiAPI = functions.https.onCall(async (data, context) => {
   // Debug: Context bilgilerini logla
   functions.logger.info("🔍 callGeminiAPI çağrıldı");
   functions.logger.info("Context auth:", context.auth ? "Var" : "YOK!");
+  functions.logger.info("Gelen data keys:", Object.keys(data));
+
   if (context.auth) {
     functions.logger.info("User ID:", context.auth.uid);
     functions.logger.info("User token:", context.auth.token ? "Var" : "Yok");
   }
 
   // ⚠️ GEÇİCİ: Auth kontrolü devre dışı (test için)
-  // TODO: Test sonrası tekrar aktif edilecek
   if (!context.auth) {
-    functions.logger.warn("⚠️ UYARI: Auth olmadan devam ediliyor (TEST MODE)");
-    // throw new functions.https.HttpsError(
-    //     "unauthenticated",
-    //     "Bu işlem için giriş yapmalısınız",
-    // );
+    functions.logger.warn(
+        "⚠️ UYARI: Auth olmadan devam ediliyor (TEST MODE)",
+    );
   }
 
-  const {prompt, imageBase64} = data;
+  // Data içeriğini detaylı logla
+  // Firebase Functions v2 için data wrapper kontrolü
+  const requestData = data.data || data;
+  const {prompt, imageBase64} = requestData;
+
+  const promptInfo = prompt ?
+    `Evet (${prompt.length} karakter)` : "YOK!";
+  const imageInfo = imageBase64 ?
+    `Evet (${imageBase64.length} karakter)` : "YOK!";
+
+  functions.logger.info("📝 Prompt var mı?", promptInfo);
+  functions.logger.info("🖼️ ImageBase64 var mı?", imageInfo);
 
   if (!prompt) {
+    functions.logger.error("❌ HATA: Prompt boş veya undefined!");
+    functions.logger.error("Data wrapper keys:", Object.keys(data));
     throw new functions.https.HttpsError(
         "invalid-argument",
         "Prompt gereklidir",
@@ -59,12 +71,13 @@ exports.callGeminiAPI = functions.https.onCall(async (data, context) => {
       throw new Error("GEMINI_API_KEY yapılandırılmamış");
     }
 
-    functions.logger.info(
-        `🤖 Gemini API çağrısı - User: ${context.auth.uid}`,
-    );
+    // context.auth null check ekle
+    const userId = context.auth ? context.auth.uid : "anonymous";
+    functions.logger.info(`🤖 Gemini API çağrısı - User: ${userId}`);
 
     // Gemini API'ye istek gönder
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const geminiUrl = "https://generativelanguage.googleapis.com" +
+      `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const requestBody = {
       contents: [{
@@ -93,6 +106,8 @@ exports.callGeminiAPI = functions.https.onCall(async (data, context) => {
       });
     }
 
+    functions.logger.info("📡 Gemini API'ye istek gönderiliyor...");
+
     const response = await axios.post(geminiUrl, requestBody, {
       headers: {"Content-Type": "application/json"},
       timeout: 60000, // 60 saniye timeout
@@ -115,6 +130,7 @@ exports.callGeminiAPI = functions.https.onCall(async (data, context) => {
     };
   } catch (error) {
     functions.logger.error("❌ Gemini API hatası:", error.message);
+    functions.logger.error("Stack trace:", error.stack);
 
     throw new functions.https.HttpsError(
         "internal",
