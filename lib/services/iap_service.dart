@@ -13,7 +13,6 @@ class InAppPurchaseService {
   static const String credit10 = 'credits_10';
   static const String credit25 = 'credits_25';
   static const String credit50 = 'credits_50';
-  static const String credit100 = 'credits_100';
   static const String premiumMonthly = 'premium_monthly';
   static const String premium3Months = 'premium_3months';
   static const String premiumYearly = 'premium_yearly';
@@ -24,7 +23,6 @@ class InAppPurchaseService {
     credit10,
     credit25,
     credit50,
-    credit100,
     premiumMonthly,
     premium3Months,
     premiumYearly,
@@ -183,8 +181,24 @@ class InAppPurchaseService {
     }
   }
   
-  // Kredi miktarını product ID'den al
+  // Kredi miktarını product ID'den al (BONUS DAHİL)
   int getCreditAmountFromProduct(String productId) {
+    switch (productId) {
+      case credit5:
+        return 6;   // 5 + 1 bonus
+      case credit10:
+        return 12;  // 10 + 2 bonus
+      case credit25:
+        return 30;  // 25 + 5 bonus
+      case credit50:
+        return 65;  // 50 + 15 bonus
+      default:
+        return 0;
+    }
+  }
+  
+  // Sadece base kredi miktarını al (bonus hariç)
+  int getBaseCreditAmount(String productId) {
     switch (productId) {
       case credit5:
         return 5;
@@ -194,8 +208,22 @@ class InAppPurchaseService {
         return 25;
       case credit50:
         return 50;
-      case credit100:
-        return 100;
+      default:
+        return 0;
+    }
+  }
+  
+  // Bonus kredi miktarını al
+  int getBonusCreditAmount(String productId) {
+    switch (productId) {
+      case credit5:
+        return 1;
+      case credit10:
+        return 2;
+      case credit25:
+        return 5;
+      case credit50:
+        return 15;
       default:
         return 0;
     }

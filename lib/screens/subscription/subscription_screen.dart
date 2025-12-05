@@ -119,7 +119,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'productId': InAppPurchaseService.credit5,
         'credits': 5,
         'price': 29.99,
-        'bonus': 0,
+        'bonus': 1,  // ✅ 5 + 1 bonus = 6 toplam
         'popular': false,
         'color': Colors.blue,
       },
@@ -127,7 +127,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'productId': InAppPurchaseService.credit10,
         'credits': 10,
         'price': 49.99,
-        'bonus': 2,
+        'bonus': 2,  // ✅ 10 + 2 bonus = 12 toplam
         'popular': true,
         'color': Colors.purple,
       },
@@ -135,7 +135,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'productId': InAppPurchaseService.credit25,
         'credits': 25,
         'price': 99.99,
-        'bonus': 5,
+        'bonus': 5,  // ✅ 25 + 5 bonus = 30 toplam
         'popular': false,
         'color': Colors.orange,
       },
@@ -143,7 +143,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         'productId': InAppPurchaseService.credit50,
         'credits': 50,
         'price': 179.99,
-        'bonus': 15,
+        'bonus': 15,  // ✅ 50 + 15 bonus = 65 toplam
         'popular': false,
         'color': Colors.green,
       },
