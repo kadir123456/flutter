@@ -9,6 +9,7 @@ class GeminiServiceSecure {
   factory GeminiServiceSecure() => _instance;
   GeminiServiceSecure._internal();
 
+  // Firebase Functions instance - default region (otomatik detect eder)
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   /// Görsel analizi - Cloud Function üzerinden
@@ -22,6 +23,26 @@ class GeminiServiceSecure {
         throw Exception('Kullanıcı giriş yapmamış');
       }
 
+      print('✅ Kullanıcı bulundu: ${user.uid}');
+      print('📧 Email: ${user.email}');
+      print('🔐 Email Verified: ${user.emailVerified}');
+
+      // Token'ı yenile ve kontrol et (expire olmuş olabilir)
+      try {
+        final idToken = await user.getIdToken(true); // force refresh
+        print('✅ Auth token yenilendi');
+        print('🎫 Token length: ${idToken?.length ?? 0}');
+        
+        // Token'ı manuel olarak kontrol et
+        if (idToken == null || idToken.isEmpty) {
+          throw Exception('Token alınamadı - lütfen çıkış yapıp tekrar giriş yapın');
+        }
+      } catch (tokenError) {
+        print('⚠️ Token yenileme hatası: $tokenError');
+        throw Exception('Token yenileme başarısız: $tokenError');
+      }
+
+      // Prompt'u hazırla (Cloud Function'a gönderilecek)
       final prompt = '''Bu görseldeki futbol maçlarını analiz et ve her maç için takım isimlerini çıkar.
 
 ÖNEMLİ: Takım isimlerini resmi İngilizce isimlerine çevir. Football-API.com ile uyumlu olmalı.
@@ -45,6 +66,10 @@ JSON formatı:
 
 Sadece JSON döndür, başka açıklama yazma.''';
 
+      print('📡 Cloud Function çağrısı yapılıyor...');
+      print('📝 Prompt hazır, uzunluk: ${prompt.length}');
+      print('🖼️ Base64 image hazır, uzunluk: ${base64Image.length}');
+
       // Cloud Function'ı çağır
       final callable = _functions.httpsCallable('callGeminiAPI');
       final result = await callable.call({
@@ -61,6 +86,18 @@ Sadece JSON döndür, başka açıklama yazma.''';
       }
 
       return text;
+    } on FirebaseFunctionsException catch (e) {
+      print('❌ Firebase Functions Hatası:');
+      print('   Code: ${e.code}');
+      print('   Message: ${e.message}');
+      print('   Details: ${e.details}');
+      
+      // Kullanıcıya daha anlaşılır hata mesajı
+      if (e.code == 'unauthenticated') {
+        throw Exception('Oturum süresi dolmuş olabilir. Lütfen çıkış yapıp tekrar giriş yapın.');
+      }
+      
+      rethrow;
     } catch (e) {
       print('❌ Güvenli Gemini Service Error: $e');
       rethrow;
@@ -78,6 +115,18 @@ Sadece JSON döndür, başka açıklama yazma.''';
         throw Exception('Kullanıcı giriş yapmamış');
       }
 
+      print('✅ Kullanıcı bulundu: ${user.uid}');
+
+      // Token'ı yenile (expire olmuş olabilir)
+      try {
+        await user.getIdToken(true); // force refresh
+        print('✅ Auth token yenilendi');
+      } catch (tokenError) {
+        print('⚠️ Token yenileme hatası: $tokenError');
+      }
+
+      print('📡 Cloud Function çağrısı yapılıyor...');
+
       // Cloud Function'ı çağır
       final callable = _functions.httpsCallable('callGeminiAPI');
       final result = await callable.call({
@@ -87,6 +136,18 @@ Sadece JSON döndür, başka açıklama yazma.''';
       print('✅ Güvenli Gemini metin analizi başarılı');
 
       return result.data['text'] as String;
+    } on FirebaseFunctionsException catch (e) {
+      print('❌ Firebase Functions Hatası:');
+      print('   Code: ${e.code}');
+      print('   Message: ${e.message}');
+      print('   Details: ${e.details}');
+      
+      // Kullanıcıya daha anlaşılır hata mesajı
+      if (e.code == 'unauthenticated') {
+        throw Exception('Oturum süresi dolmuş olabilir. Lütfen çıkış yapıp tekrar giriş yapın.');
+      }
+      
+      rethrow;
     } catch (e) {
       print('❌ Güvenli Gemini Text Analysis Error: $e');
       rethrow;

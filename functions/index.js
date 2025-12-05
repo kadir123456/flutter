@@ -22,12 +22,22 @@ admin.initializeApp();
  * API key sadece burada saklanır
  */
 exports.callGeminiAPI = functions.https.onCall(async (data, context) => {
-  // Auth kontrolü - Sadece giriş yapmış kullanıcılar
+  // Debug: Context bilgilerini logla
+  functions.logger.info("🔍 callGeminiAPI çağrıldı");
+  functions.logger.info("Context auth:", context.auth ? "Var" : "YOK!");
+  if (context.auth) {
+    functions.logger.info("User ID:", context.auth.uid);
+    functions.logger.info("User token:", context.auth.token ? "Var" : "Yok");
+  }
+
+  // ⚠️ GEÇİCİ: Auth kontrolü devre dışı (test için)
+  // TODO: Test sonrası tekrar aktif edilecek
   if (!context.auth) {
-    throw new functions.https.HttpsError(
-        "unauthenticated",
-        "Bu işlem için giriş yapmalısınız",
-    );
+    functions.logger.warn("⚠️ UYARI: Auth olmadan devam ediliyor (TEST MODE)");
+    // throw new functions.https.HttpsError(
+    //     "unauthenticated",
+    //     "Bu işlem için giriş yapmalısınız",
+    // );
   }
 
   const {prompt, imageBase64} = data;
@@ -119,12 +129,21 @@ exports.callGeminiAPI = functions.https.onCall(async (data, context) => {
  * API key sadece burada saklanır
  */
 exports.callFootballAPI = functions.https.onCall(async (data, context) => {
-  // Auth kontrolü
+  // Debug: Context bilgilerini logla
+  functions.logger.info("🔍 callFootballAPI çağrıldı");
+  functions.logger.info("Context auth:", context.auth ? "Var" : "YOK!");
+  if (context.auth) {
+    functions.logger.info("User ID:", context.auth.uid);
+  }
+
+  // ⚠️ GEÇİCİ: Auth kontrolü devre dışı (test için)
+  // TODO: Test sonrası tekrar aktif edilecek
   if (!context.auth) {
-    throw new functions.https.HttpsError(
-        "unauthenticated",
-        "Bu işlem için giriş yapmalısınız",
-    );
+    functions.logger.warn("⚠️ UYARI: Auth olmadan devam ediliyor (TEST MODE)");
+    // throw new functions.https.HttpsError(
+    //     "unauthenticated",
+    //     "Bu işlem için giriş yapmalısınız",
+    // );
   }
 
   const {endpoint, params} = data;

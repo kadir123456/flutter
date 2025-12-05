@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 class InAppPurchaseService {
   final InAppPurchase _inAppPurchase = InAppPurchase.instance;
+  // Firebase Functions instance - default region (otomatik detect eder)
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
   late StreamSubscription<List<PurchaseDetails>> _subscription;
   

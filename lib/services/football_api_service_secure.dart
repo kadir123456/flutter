@@ -9,6 +9,7 @@ class FootballApiServiceSecure {
   factory FootballApiServiceSecure() => _instance;
   FootballApiServiceSecure._internal();
 
+  // Firebase Functions instance - default region (otomatik detect eder)
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   /// Takım bilgisi getir (isim ile arama)
@@ -20,6 +21,14 @@ class FootballApiServiceSecure {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw Exception('Kullanıcı giriş yapmamış');
+      }
+
+      // Token'ı yenile
+      try {
+        await user.getIdToken(true);
+        print('✅ Auth token yenilendi');
+      } catch (tokenError) {
+        print('⚠️ Token yenileme hatası: $tokenError');
       }
 
       final cleanName = _cleanTurkishChars(teamName);
@@ -43,6 +52,15 @@ class FootballApiServiceSecure {
       }
 
       print('❌ Takım bulunamadı: $teamName');
+      return null;
+    } on FirebaseFunctionsException catch (e) {
+      print('❌ Firebase Functions Hatası:');
+      print('   Code: ${e.code}');
+      print('   Message: ${e.message}');
+      
+      if (e.code == 'unauthenticated') {
+        throw Exception('Oturum süresi dolmuş. Lütfen çıkış yapıp tekrar giriş yapın.');
+      }
       return null;
     } catch (e) {
       print('❌ Güvenli Football API Search Error: $e');
