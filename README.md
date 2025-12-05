@@ -16,5 +16,5 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 
 flutter run -d chrome
-
+gemini-2.5-pro:generateContent?key=
 flutter build appbundle --release

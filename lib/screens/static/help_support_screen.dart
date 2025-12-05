@@ -14,7 +14,7 @@ class HelpSupportScreen extends StatelessWidget {
   Future<void> _sendEmail() async {
     final uri = Uri(
       scheme: 'mailto',
-      path: 'bilwininc@gmail.com',
+      path: 'support@bilwin.inc',
       query: 'subject=AI Spor Pro - Destek Talebi',
     );
     if (await canLaunchUrl(uri)) {
@@ -65,7 +65,7 @@ class HelpSupportScreen extends StatelessWidget {
             context,
             icon: Icons.email_outlined,
             title: 'E-posta',
-            subtitle: 'bilwininc@gmail.com',
+            subtitle: 'support@bilwin.inc',
             color: Colors.blue,
             onTap: _sendEmail,
           ),

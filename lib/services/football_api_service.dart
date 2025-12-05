@@ -22,7 +22,8 @@ class FootballApiService {
       final encodedName = Uri.encodeComponent(cleanName);
       final url = Uri.parse('$_baseUrl/teams?search=$encodedName');
       final response = await http.get(url, headers: {
-        'x-apisports-key': _apiKey,
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -65,7 +66,8 @@ class FootballApiService {
       final url = Uri.parse('$_baseUrl/teams/seasons?team=$teamId');
       
       final response = await http.get(url, headers: {
-        'x-apisports-key': _apiKey,
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -73,26 +75,16 @@ class FootballApiService {
         final seasons = data['response'] as List?;
         
         if (seasons != null && seasons.isNotEmpty) {
-          // ✅ FIX: Seasons direkt integer yıllar olabilir veya Map olabilir
-          dynamic recentSeason;
+          // Son sezondaki ligleri al
+          final recentSeason = seasons.firstWhere(
+            (s) => s['year'] == season || s['year'] == season - 1,
+            orElse: () => seasons.first,
+          );
           
-          // İlk elemanın tipini kontrol et
-          if (seasons.first is int) {
-            // Direkt yıl listesi [2015, 2016, 2017...]
-            print('⚠️ Seasons direkt yıl listesi - Lig bilgisi alınamıyor');
-            return [];
-          } else if (seasons.first is Map) {
-            // Map formatında [{year: 2015, leagues: [...]}, ...]
-            recentSeason = seasons.firstWhere(
-              (s) => s['year'] == season || s['year'] == season - 1,
-              orElse: () => seasons.first,
-            );
-            
-            final leagues = recentSeason['leagues'] as List?;
-            if (leagues != null && leagues.isNotEmpty) {
-              // Lig ID'lerini çıkar
-              return leagues.map<int>((l) => l['league']['id'] as int).toList();
-            }
+          final leagues = recentSeason['leagues'] as List?;
+          if (leagues != null && leagues.isNotEmpty) {
+            // Lig ID'lerini çıkar
+            return leagues.map<int>((l) => l['league']['id'] as int).toList();
           }
         }
       }
@@ -136,7 +128,8 @@ class FootballApiService {
       final url = Uri.parse('$_baseUrl/teams/statistics?team=$teamId&season=$season&league=$leagueId');
 
       final response = await http.get(url, headers: {
-        'x-apisports-key': _apiKey,
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -173,7 +166,8 @@ class FootballApiService {
       final url = Uri.parse('$_baseUrl/fixtures?team=$teamId&last=$limit');
 
       final response = await http.get(url, headers: {
-        'x-apisports-key': _apiKey,
+        'x-rapidapi-host': 'v3.football.api-sports.io',
+        'x-rapidapi-key': _apiKey,
       });
 
       if (response.statusCode == 200) {
@@ -209,7 +203,8 @@ class FootballApiService {
       final response = await http.get(
         url,
         headers: {
-          'x-apisports-key': _apiKey,
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-rapidapi-key': _apiKey,
         },
       );
 
@@ -238,7 +233,8 @@ class FootballApiService {
       final response = await http.get(
         url,
         headers: {
-          'x-apisports-key': _apiKey,
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-rapidapi-key': _apiKey,
         },
       );
 

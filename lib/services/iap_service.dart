@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class InAppPurchaseService {
   final InAppPurchase _inAppPurchase = InAppPurchase.instance;
@@ -14,6 +13,7 @@ class InAppPurchaseService {
   static const String credit10 = 'credits_10';
   static const String credit25 = 'credits_25';
   static const String credit50 = 'credits_50';
+  static const String credit100 = 'credits_100';
   static const String premiumMonthly = 'premium_monthly';
   static const String premium3Months = 'premium_3months';
   static const String premiumYearly = 'premium_yearly';
@@ -24,6 +24,7 @@ class InAppPurchaseService {
     credit10,
     credit25,
     credit50,
+    credit100,
     premiumMonthly,
     premium3Months,
     premiumYearly,
@@ -42,19 +43,18 @@ class InAppPurchaseService {
   Function(PurchaseDetails)? onPurchaseSuccess;
   Function(String)? onPurchaseError;
   
-  // Package name (Android) - build.gradle.kts'den alınmıştır
-  static const String packageName = 'com.aisporanaliz.app';
-  
   // Initialize
   Future<void> initialize() async {
     try {
       // Android için ekstra ayarlar
+      // NOT: enablePendingPurchases() artık gerekli değil, otomatik aktif
       if (Platform.isAndroid) {
         final InAppPurchaseAndroidPlatformAddition androidAddition =
             _inAppPurchase
                 .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
         
-        debugPrint('✅ Android IAP platform eklentisi yüklendi');
+        // Android platform eklentisi hazır
+        debugPrint('Android IAP platform eklentisi yüklendi');
       }
       
       // Store bağlantısını kontrol et
@@ -159,72 +159,16 @@ class InAppPurchaseService {
           onPurchaseError?.call(purchaseDetails.error?.message ?? 'Bilinmeyen hata');
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
                    purchaseDetails.status == PurchaseStatus.restored) {
-          // ✅ CLIENT-SIDE DOĞRULAMA - Basit ve hızlı
-          _handleSuccessfulPurchase(purchaseDetails);
+          // Satın alma başarılı
+          _purchasePending = false;
+          onPurchaseSuccess?.call(purchaseDetails);
         }
         
-        // Purchase'ı complete et
+        // Satın almayı tamamla
         if (purchaseDetails.pendingCompletePurchase) {
           _inAppPurchase.completePurchase(purchaseDetails);
         }
       }
-    }
-  }
-  
-  // 🔐 BAŞARILI SATIN ALMA İŞLEMİ - Duplicate kontrolü ile
-  Future<void> _handleSuccessfulPurchase(PurchaseDetails purchaseDetails) async {
-    try {
-      debugPrint('✅ Satın alma başarılı: ${purchaseDetails.productID}');
-      
-      // Duplicate purchase kontrolü (local cache ile)
-      final isDuplicate = await _checkDuplicatePurchase(purchaseDetails);
-      if (isDuplicate) {
-        debugPrint('⚠️ Bu satın alma zaten kullanılmış');
-        _purchasePending = false;
-        onPurchaseError?.call('Bu satın alma zaten kullanılmış');
-        return;
-      }
-      
-      // Purchase'ı kaydet (local cache)
-      await _savePurchaseToCache(purchaseDetails);
-      
-      // Başarılı - Callback çağır
-      _purchasePending = false;
-      onPurchaseSuccess?.call(purchaseDetails);
-      
-      debugPrint('✅ Purchase işlendi ve kaydedildi');
-    } catch (e) {
-      debugPrint('❌ Purchase işleme hatası: $e');
-      _purchasePending = false;
-      onPurchaseError?.call('Satın alma işlenirken hata: ${e.toString()}');
-    }
-  }
-  
-  // Duplicate purchase kontrolü (local cache ile)
-  Future<bool> _checkDuplicatePurchase(PurchaseDetails purchaseDetails) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final purchaseKey = 'purchase_${purchaseDetails.productID}_${purchaseDetails.purchaseID}';
-      
-      // Eğer bu purchase daha önce kaydedilmişse
-      return prefs.containsKey(purchaseKey);
-    } catch (e) {
-      debugPrint('⚠️ Duplicate kontrolü hatası: $e');
-      return false; // Hata durumunda satın almaya izin ver
-    }
-  }
-  
-  // Purchase'ı local cache'e kaydet
-  Future<void> _savePurchaseToCache(PurchaseDetails purchaseDetails) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final purchaseKey = 'purchase_${purchaseDetails.productID}_${purchaseDetails.purchaseID}';
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      
-      await prefs.setInt(purchaseKey, timestamp);
-      debugPrint('✅ Purchase cache\'e kaydedildi: $purchaseKey');
-    } catch (e) {
-      debugPrint('⚠️ Purchase kaydetme hatası: $e');
     }
   }
   
@@ -239,24 +183,8 @@ class InAppPurchaseService {
     }
   }
   
-  // Kredi miktarını product ID'den al (BONUS DAHİL)
+  // Kredi miktarını product ID'den al
   int getCreditAmountFromProduct(String productId) {
-    switch (productId) {
-      case credit5:
-        return 6;   // 5 + 1 bonus
-      case credit10:
-        return 12;  // 10 + 2 bonus
-      case credit25:
-        return 30;  // 25 + 5 bonus
-      case credit50:
-        return 65;  // 50 + 15 bonus
-      default:
-        return 0;
-    }
-  }
-  
-  // Sadece base kredi miktarını al (bonus hariç)
-  int getBaseCreditAmount(String productId) {
     switch (productId) {
       case credit5:
         return 5;
@@ -266,22 +194,8 @@ class InAppPurchaseService {
         return 25;
       case credit50:
         return 50;
-      default:
-        return 0;
-    }
-  }
-  
-  // Bonus kredi miktarını al
-  int getBonusCreditAmount(String productId) {
-    switch (productId) {
-      case credit5:
-        return 1;
-      case credit10:
-        return 2;
-      case credit25:
-        return 5;
-      case credit50:
-        return 15;
+      case credit100:
+        return 100;
       default:
         return 0;
     }

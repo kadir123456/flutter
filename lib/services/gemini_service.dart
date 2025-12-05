@@ -7,16 +7,16 @@ class GeminiService {
   factory GeminiService() => _instance;
   GeminiService._internal();
 
-  final String _baseUrl = 'https://generativelanguage.googleapis.com/v1/models';
+  final String _baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
   final RemoteConfigService _remoteConfig = RemoteConfigService();
   
   String get _apiKey => _remoteConfig.geminiApiKey;
 
-  /// Gemini Flash ile görsel analizi
+  /// Gemini 2.0 Flash Thinking Exp ile görsel analizi
   Future<String> analyzeImage(String base64Image) async {
     try {
-      // ✅ Güncel model: gemini-2.5-flash (Haziran 2025)
-      final url = Uri.parse('$_baseUrl/gemini-2.5-flash:generateContent?key=$_apiKey');
+      // ⭐ DEĞİŞTİ: gemini-2.5-pro → gemini-2.0-flash-thinking-exp
+      final url = Uri.parse('$_baseUrl/gemini-2.5-pro:generateContent?key=$_apiKey');
 
       final body = jsonEncode({
         'contents': [
@@ -59,7 +59,7 @@ Sadece JSON döndür, başka açıklama yazma.'''
           'temperature': 0.4,
           'topK': 32,
           'topP': 1,
-          'maxOutputTokens': 8192, // Gemini 2.5 Flash max: 65,536
+          'maxOutputTokens': 8192,
         }
       });
 
@@ -90,7 +90,7 @@ Sadece JSON döndür, başka açıklama yazma.'''
   /// Metin analizi (opsiyonel)
   Future<String> analyzeText(String prompt) async {
     try {
-      final url = Uri.parse('$_baseUrl/gemini-2.5-flash:generateContent?key=$_apiKey');
+      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-exp:generateContent?key=$_apiKey');
 
       final body = jsonEncode({
         'contents': [
@@ -102,7 +102,7 @@ Sadece JSON döndür, başka açıklama yazma.'''
         ],
         'generationConfig': {
           'temperature': 0.7,
-          'maxOutputTokens': 8192, // Gemini 2.5 Flash için artırıldı
+          'maxOutputTokens': 2048,
         }
       });
 
@@ -124,25 +124,94 @@ Sadece JSON döndür, başka açıklama yazma.'''
     }
   }
 
-  /// ⭐ YENİ METOD: Google Search ile analiz (OPSIYONEL) - DEVRE DIŞI
+  /// ⭐ YENİ METOD: Google Search ile analiz (OPSIYONEL)
   Future<String> analyzeWithGoogleSearch(String prompt) async {
     try {
-      print('⚠️ Google Search devre dışı - Normal analiz yapılıyor...');
+      print('🔍 Google Search ile analiz başlatılıyor...');
       
-      // Google Search devre dışı - normal analiz yap
-      return await analyzeText(prompt);
+      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-thinking-exp:generateContent?key=$_apiKey');
 
-      // Artık buraya ulaşmayacak - üstteki return zaten döndürüyor
+      final body = jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
+        'generationConfig': {
+          'temperature': 0.1,
+          'topK': 20,
+          'topP': 0.9,
+          'maxOutputTokens': 8192,
+        },
+        // ⭐ GOOGLE SEARCH AKTİF
+        'tools': [
+          {
+            'googleSearch': {}
+          }
+        ]
+      });
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+        
+        print('✅ Google Search analizi tamamlandı');
+        return text;
+      } else {
+        throw Exception('Gemini API error: ${response.statusCode}');
+      }
     } catch (e) {
-      print('❌ Gemini Error: $e');
+      print('❌ Gemini Google Search Error: $e');
       rethrow;
     }
   }
 
-  /// ⭐ YENİ: Opsiyonel Google Search ile analiz - DEVRE DIŞI
+  /// ⭐ YENİ: Opsiyonel Google Search ile analiz
   Future<String> analyzeWithOptionalSearch(String prompt, {bool useSearch = false}) async {
-    // Google Search devre dışı - her zaman normal analiz yap
-    print('⚠️ Google Search parametresi göz ardı ediliyor - Normal analiz yapılıyor');
-    return await analyzeText(prompt);
+    try {
+      final url = Uri.parse('$_baseUrl/gemini-2.0-flash-exp:generateContent?key=$_apiKey');
+
+      final body = jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
+        'generationConfig': {
+          'temperature': 0.4,
+          'maxOutputTokens': 8192,
+        },
+        if (useSearch) // ✅ Sadece gerekirse ekle
+          'tools': [
+            {'googleSearch': {}}
+          ],
+      });
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+      }
+
+      throw Exception('Gemini error: ${response.statusCode}');
+    } catch (e) {
+      print('❌ Gemini Error: $e');
+      rethrow;
+    }
   }
 }
