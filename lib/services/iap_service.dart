@@ -3,12 +3,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class InAppPurchaseService {
   final InAppPurchase _inAppPurchase = InAppPurchase.instance;
-  // Firebase Functions instance - default region (otomatik detect eder)
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
   late StreamSubscription<List<PurchaseDetails>> _subscription;
   
   // Product ID'leri - Google Play Console'da tanımlanacak
@@ -51,14 +49,12 @@ class InAppPurchaseService {
   Future<void> initialize() async {
     try {
       // Android için ekstra ayarlar
-      // NOT: enablePendingPurchases() artık gerekli değil, otomatik aktif
       if (Platform.isAndroid) {
         final InAppPurchaseAndroidPlatformAddition androidAddition =
             _inAppPurchase
                 .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
         
-        // Android platform eklentisi hazır
-        debugPrint('Android IAP platform eklentisi yüklendi');
+        debugPrint('✅ Android IAP platform eklentisi yüklendi');
       }
       
       // Store bağlantısını kontrol et
@@ -163,82 +159,72 @@ class InAppPurchaseService {
           onPurchaseError?.call(purchaseDetails.error?.message ?? 'Bilinmeyen hata');
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
                    purchaseDetails.status == PurchaseStatus.restored) {
-          // ✅ SUNUCU TARAFI DOĞRULAMA
-          _verifyPurchaseWithServer(purchaseDetails);
+          // ✅ CLIENT-SIDE DOĞRULAMA - Basit ve hızlı
+          _handleSuccessfulPurchase(purchaseDetails);
         }
         
-        // Satın almayı tamamla (doğrulama sonrası yapılacak)
-        // if (purchaseDetails.pendingCompletePurchase) {
-        //   _inAppPurchase.completePurchase(purchaseDetails);
-        // }
+        // Purchase'ı complete et
+        if (purchaseDetails.pendingCompletePurchase) {
+          _inAppPurchase.completePurchase(purchaseDetails);
+        }
       }
     }
   }
   
-  // 🔐 SUNUCU DOĞRULAMA - Sahte satın almaları engeller!
-  Future<void> _verifyPurchaseWithServer(PurchaseDetails purchaseDetails) async {
+  // 🔐 BAŞARILI SATIN ALMA İŞLEMİ - Duplicate kontrolü ile
+  Future<void> _handleSuccessfulPurchase(PurchaseDetails purchaseDetails) async {
     try {
-      debugPrint('🔐 Satın alma sunucu doğrulaması başlıyor...');
+      debugPrint('✅ Satın alma başarılı: ${purchaseDetails.productID}');
       
-      String? purchaseToken;
-      
-      // Android için purchase token al
-      if (Platform.isAndroid) {
-        final androidDetails = purchaseDetails as PurchaseDetails;
-        // verificationData içinde serverVerificationData var
-        purchaseToken = androidDetails.verificationData.serverVerificationData;
-      }
-      
-      if (purchaseToken == null || purchaseToken.isEmpty) {
-        debugPrint('❌ Purchase token bulunamadı');
+      // Duplicate purchase kontrolü (local cache ile)
+      final isDuplicate = await _checkDuplicatePurchase(purchaseDetails);
+      if (isDuplicate) {
+        debugPrint('⚠️ Bu satın alma zaten kullanılmış');
         _purchasePending = false;
-        onPurchaseError?.call('Satın alma bilgisi eksik');
+        onPurchaseError?.call('Bu satın alma zaten kullanılmış');
         return;
       }
       
-      // Firebase Functions ile doğrula
-      final callable = _functions.httpsCallable('verifyGooglePlayPurchase');
-      final result = await callable.call({
-        'productId': purchaseDetails.productID,
-        'purchaseToken': purchaseToken,
-        'packageName': packageName,
-      });
+      // Purchase'ı kaydet (local cache)
+      await _savePurchaseToCache(purchaseDetails);
       
-      final data = result.data;
-      
-      if (data['success'] == true && data['verified'] == true) {
-        debugPrint('✅ Satın alma sunucuda doğrulandı: ${data['orderId']}');
-        
-        // Başarılı - Callback çağır
-        _purchasePending = false;
-        onPurchaseSuccess?.call(purchaseDetails);
-        
-        // Satın almayı tamamla
-        if (purchaseDetails.pendingCompletePurchase) {
-          await _inAppPurchase.completePurchase(purchaseDetails);
-          debugPrint('✅ Purchase completed');
-        }
-      } else {
-        debugPrint('❌ Sunucu doğrulama başarısız');
-        _purchasePending = false;
-        onPurchaseError?.call('Satın alma doğrulanamadı');
-      }
-    } catch (e) {
-      debugPrint('❌ Sunucu doğrulama hatası: $e');
+      // Başarılı - Callback çağır
       _purchasePending = false;
+      onPurchaseSuccess?.call(purchaseDetails);
       
-      // Hata mesajını kontrol et
-      if (e.toString().contains('already-exists') || 
-          e.toString().contains('Bu satın alma daha önce kullanıldı')) {
-        onPurchaseError?.call('Bu satın alma zaten kullanılmış');
-      } else {
-        onPurchaseError?.call('Doğrulama hatası: ${e.toString()}');
-      }
+      debugPrint('✅ Purchase işlendi ve kaydedildi');
+    } catch (e) {
+      debugPrint('❌ Purchase işleme hatası: $e');
+      _purchasePending = false;
+      onPurchaseError?.call('Satın alma işlenirken hata: ${e.toString()}');
+    }
+  }
+  
+  // Duplicate purchase kontrolü (local cache ile)
+  Future<bool> _checkDuplicatePurchase(PurchaseDetails purchaseDetails) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final purchaseKey = 'purchase_${purchaseDetails.productID}_${purchaseDetails.purchaseID}';
       
-      // Purchase'ı complete et (hata durumunda da)
-      if (purchaseDetails.pendingCompletePurchase) {
-        await _inAppPurchase.completePurchase(purchaseDetails);
-      }
+      // Eğer bu purchase daha önce kaydedilmişse
+      return prefs.containsKey(purchaseKey);
+    } catch (e) {
+      debugPrint('⚠️ Duplicate kontrolü hatası: $e');
+      return false; // Hata durumunda satın almaya izin ver
+    }
+  }
+  
+  // Purchase'ı local cache'e kaydet
+  Future<void> _savePurchaseToCache(PurchaseDetails purchaseDetails) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final purchaseKey = 'purchase_${purchaseDetails.productID}_${purchaseDetails.purchaseID}';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      await prefs.setInt(purchaseKey, timestamp);
+      debugPrint('✅ Purchase cache\'e kaydedildi: $purchaseKey');
+    } catch (e) {
+      debugPrint('⚠️ Purchase kaydetme hatası: $e');
     }
   }
   
